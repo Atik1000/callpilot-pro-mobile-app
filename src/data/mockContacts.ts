@@ -1,0 +1,86 @@
+import { Contact } from '../types';
+import { yesterdayAt } from './constants';
+
+export const CONTACT_IDS = {
+  jSmith: 'contact-j-smith',
+  aBrown: 'contact-a-brown',
+  kLee: 'contact-k-lee',
+  mReid: 'contact-m-reid',
+  aShah: 'contact-a-shah',
+} as const;
+
+export const mockContacts: Contact[] = [
+  {
+    id: CONTACT_IDS.jSmith,
+    name: 'J. Smith',
+    phone: '07700 900321',
+    email: 'j.smith@example.com',
+    category: 'candidate',
+    jobTitle: 'Warehouse Operative',
+    location: 'Croydon',
+    isFavourite: true,
+    atsId: 'ATS-10482',
+    atsStatus: 'Documents Requested',
+    atsStatusDetail: 'Waiting on candidate',
+    openJobs: 2,
+    lastContact: yesterdayAt(16, 20),
+  },
+  {
+    id: CONTACT_IDS.aBrown,
+    name: 'A. Brown',
+    phone: '020 7946 0812',
+    email: 'a.brown@brightsidecare.example',
+    category: 'client',
+    company: 'Brightside Care',
+    jobTitle: 'Operations Manager',
+    isFavourite: true,
+    atsId: 'ATS-20417',
+    atsStatus: 'Active client',
+    atsStatusDetail: '2 open jobs',
+    openJobs: 2,
+    lastContact: yesterdayAt(11, 5),
+  },
+  {
+    id: CONTACT_IDS.kLee,
+    name: 'K. Lee',
+    phone: '07700 900456',
+    email: 'k.lee@example.com',
+    category: 'candidate',
+    jobTitle: 'Forklift Driver',
+    location: 'Lewisham',
+    isFavourite: true,
+    atsId: 'ATS-10519',
+    atsStatus: 'Documents received',
+    atsStatusDetail: 'Ready to check',
+    openJobs: 1,
+    lastContact: yesterdayAt(14, 45),
+  },
+  {
+    id: CONTACT_IDS.mReid,
+    name: 'M. Reid',
+    phone: '07700 900789',
+    email: 'm.reid@northgatelogistics.example',
+    category: 'client',
+    company: 'Northgate Logistics',
+    jobTitle: 'Shift Manager',
+    isFavourite: true,
+    atsId: 'ATS-20533',
+    atsStatus: 'Active client',
+    atsStatusDetail: 'Order in progress',
+    openJobs: 3,
+    lastContact: yesterdayAt(9, 30),
+  },
+  {
+    id: CONTACT_IDS.aShah,
+    name: 'A. Shah',
+    phone: '020 7946 0655',
+    email: 'a.shah@stafflink.example',
+    category: 'supplier',
+    company: 'Stafflink Supplies',
+    isFavourite: false,
+    atsId: 'ATS-30088',
+  },
+];
+
+/** The unknown number shown on the Calls screen ("Not in ATS"). */
+export const UNKNOWN_NUMBER = '07700 900123';

@@ -1,18 +1,146 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from 'expo-router';
+import {
+  Inter_400Regular,
+  Inter_500Medium,
+  Inter_600SemiBold,
+  Inter_700Bold,
+  useFonts,
+} from '@expo-google-fonts/inter';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import * as Notifications from 'expo-notifications';
+import { Href, router, Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
-import { useColorScheme } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
+import React, { useEffect, useRef } from 'react';
+import { Platform, StyleSheet, View } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { useAuthStore } from '../store/authStore';
+import { useCallStore } from '../store/callStore';
 
-import { AnimatedSplashOverlay } from '@/components/animated-icon';
-import AppTabs from '@/components/app-tabs';
+void SplashScreen.preventAutoHideAsync();
 
-SplashScreen.preventAutoHideAsync();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: { staleTime: 5 * 60 * 1000, retry: 1 },
+  },
+});
 
-export default function TabLayout() {
-  const colorScheme = useColorScheme();
+export default function RootLayout() {
+  const signedIn = useAuthStore((s) => s.stage === 'signedIn');
+  const [fontsLoaded, fontError] = useFonts({
+    Inter_400Regular,
+    Inter_500Medium,
+    Inter_600SemiBold,
+    Inter_700Bold,
+  });
+  // A notification tapped before sign-in finishes restoring is kept here
+  // and opened once the protected screens become available.
+  const pendingNotificationUrl = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (fontsLoaded || fontError) {
+      void SplashScreen.hideAsync();
+    }
+  }, [fontsLoaded, fontError]);
+
+  useEffect(() => {
+    if (Platform.OS === 'web') return;
+    const open = (response: Notifications.NotificationResponse | null) => {
+      const url = response?.notification.request.content.data?.url;
+      if (typeof url !== 'string') return;
+      if (useAuthStore.getState().stage === 'signedIn') {
+        router.push(url as Href);
+      } else {
+        pendingNotificationUrl.current = url;
+      }
+    };
+    // The tap that launched the app (cold start), then taps while running.
+    open(Notifications.getLastNotificationResponse());
+    const subscription =
+      Notifications.addNotificationResponseReceivedListener(open);
+    return () => subscription.remove();
+  }, []);
+
+  useEffect(() => {
+    if (signedIn && pendingNotificationUrl.current) {
+      const url = pendingNotificationUrl.current;
+      pendingNotificationUrl.current = null;
+      router.push(url as Href);
+    }
+  }, [signedIn]);
+
+  // The VoIP phone registers while signed in and tears down on sign-out.
+  useEffect(() => {
+    const { initVoip, shutdownVoip } = useCallStore.getState();
+    if (signedIn) {
+      initVoip();
+      return () => shutdownVoip();
+    }
+    return undefined;
+  }, [signedIn]);
+
+  // An incoming Telnyx call surfaces the full-screen incoming call UI.
+  const hasIncomingCall = useCallStore((s) => Boolean(s.incomingCall));
+  useEffect(() => {
+    if (hasIncomingCall && signedIn) {
+      router.push('/incoming-call');
+    }
+  }, [hasIncomingCall, signedIn]);
+
+  if (!fontsLoaded && !fontError) return null;
+
+  const app = (
+    <>
+      <StatusBar style="light" />
+      <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>
+          <Stack.Screen name="index" />
+          <Stack.Screen name="(auth)" options={{ animation: 'fade' }} />
+          {/* Every signed-in screen is guarded, so a reload on a detail
+              route lands on login instead of a half-empty screen. */}
+          <Stack.Protected guard={signedIn}>
+            <Stack.Screen name="(tabs)" options={{ animation: 'fade' }} />
+            <Stack.Screen
+              name="active-call"
+              options={{ animation: 'slide_from_bottom', gestureEnabled: false }}
+            />
+            <Stack.Screen
+              name="incoming-call"
+              options={{ animation: 'fade', gestureEnabled: false }}
+            />
+            <Stack.Screen name="chat/[id]" />
+            <Stack.Screen name="keypad" options={{ animation: 'slide_from_bottom' }} />
+            <Stack.Screen name="contact/[id]" />
+          </Stack.Protected>
+      </Stack>
+    </>
+  );
+
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <AnimatedSplashOverlay />
-      <AppTabs />
-    </ThemeProvider>
+    <SafeAreaProvider>
+      <QueryClientProvider client={queryClient}>
+        {Platform.OS === 'web' ? (
+          // On the web the app renders inside a centered phone-width frame,
+          // so it always presents as a mobile UI. Native is untouched.
+          <View style={styles.webBackdrop}>
+            <View style={styles.phoneFrame}>{app}</View>
+          </View>
+        ) : (
+          app
+        )}
+      </QueryClientProvider>
+    </SafeAreaProvider>
   );
 }
+
+const styles = StyleSheet.create({
+  webBackdrop: {
+    flex: 1,
+    alignItems: 'center',
+    backgroundColor: '#101013',
+  },
+  phoneFrame: {
+    flex: 1,
+    width: '100%',
+    maxWidth: 430,
+    overflow: 'hidden',
+  },
+});

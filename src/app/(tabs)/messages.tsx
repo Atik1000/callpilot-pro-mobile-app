@@ -1,0 +1,141 @@
+import { useRouter } from 'expo-router';
+import React, { useEffect, useMemo, useState } from 'react';
+import { StyleSheet, View } from 'react-native';
+import Animated, { FadeInDown, LinearTransition } from 'react-native-reanimated';
+import { ScreenContainer } from '../../components/layout/ScreenContainer';
+import { ScreenHeader } from '../../components/layout/ScreenHeader';
+import { ConversationListItem } from '../../components/messages/ConversationListItem';
+import { EmptyState } from '../../components/ui/EmptyState';
+import { ErrorState } from '../../components/ui/ErrorState';
+import { LoadingState } from '../../components/ui/LoadingState';
+import { SegmentedTabs } from '../../components/ui/SegmentedTabs';
+import { staggerDelay } from '../../components/ui/motion';
+import { useContacts } from '../../hooks/useContacts';
+import { useAuthStore } from '../../store/authStore';
+import { useMessageStore } from '../../store/messageStore';
+import { spacing } from '../../theme';
+
+type MessagesTab = 'all' | 'unread' | 'candidates' | 'clients';
+
+const TABS = [
+  { key: 'all' as const, label: 'All' },
+  { key: 'unread' as const, label: 'Unread' },
+  { key: 'candidates' as const, label: 'Candidates' },
+  { key: 'clients' as const, label: 'Clients' },
+];
+
+export default function MessagesScreen() {
+  const router = useRouter();
+  const [tab, setTab] = useState<MessagesTab>('all');
+  const [search, setSearch] = useState('');
+
+  const businessNumber = useAuthStore((s) => s.user?.businessNumber);
+  const { status, conversations, conversationContacts, load } = useMessageStore();
+  const { data: contacts, isLoading: contactsLoading, isError, refetch } = useContacts();
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const contactById = useMemo(() => {
+    const map = new Map((contacts ?? []).map((c) => [c.id, c]));
+    for (const [id, contact] of Object.entries(conversationContacts)) {
+      if (!map.has(id)) map.set(id, contact);
+    }
+    return map;
+  }, [contacts, conversationContacts]);
+
+  const filtered = useMemo(() => {
+    let list = [...conversations].sort((a, b) =>
+      b.lastMessageAt.localeCompare(a.lastMessageAt),
+    );
+    if (tab === 'unread') list = list.filter((c) => c.unreadCount > 0);
+    if (tab === 'candidates' || tab === 'clients') {
+      const category = tab === 'candidates' ? 'candidate' : 'client';
+      list = list.filter((c) => contactById.get(c.contactId)?.category === category);
+    }
+    const q = search.trim().toLowerCase();
+    if (!q) return list;
+    return list.filter((c) => {
+      const contact = contactById.get(c.contactId);
+      return (
+        contact?.name.toLowerCase().includes(q) ||
+        contact?.company?.toLowerCase().includes(q) ||
+        c.lastMessagePreview.toLowerCase().includes(q) ||
+        // Number-only conversations are searchable by their number.
+        c.contactId.replace(/\s/g, '').includes(q.replace(/\s/g, ''))
+      );
+    });
+  }, [conversations, tab, search, contactById]);
+
+  const isLoading = status === 'loading' || status === 'idle' || contactsLoading;
+  const hasError = status === 'error' || isError;
+
+  const header = (
+    <ScreenHeader
+      title="Messages"
+      subtitle={`WhatsApp and SMS · ${businessNumber ?? ''}`}
+      showSearch
+      searchPlaceholder="Search messages"
+      searchValue={search}
+      onSearchChange={setSearch}
+    />
+  );
+
+  return (
+    <ScreenContainer header={header} padded={false}>
+      <View style={styles.tabs}>
+        <SegmentedTabs tabs={TABS} selected={tab} onSelect={setTab} />
+      </View>
+      {isLoading ? (
+        <LoadingState label="Loading messages…" />
+      ) : hasError ? (
+        <ErrorState
+          description="Could not load your conversations."
+          onRetry={() => void refetch()}
+        />
+      ) : (
+        <Animated.FlatList
+          data={filtered}
+          keyExtractor={(c) => c.id}
+          itemLayoutAnimation={LinearTransition.springify().damping(19)}
+          contentContainerStyle={styles.listContent}
+          showsVerticalScrollIndicator={false}
+          ListEmptyComponent={
+            <EmptyState
+              title={tab === 'unread' ? 'Nothing unread' : 'No conversations'}
+              description={
+                search
+                  ? 'No conversations match your search.'
+                  : 'WhatsApp and SMS conversations will appear here.'
+              }
+            />
+          }
+          renderItem={({ item, index }) => (
+            <Animated.View entering={FadeInDown.delay(staggerDelay(index)).springify().damping(19)}>
+              <ConversationListItem
+                conversation={item}
+                contact={contactById.get(item.contactId)}
+                onPress={() =>
+                  router.push({ pathname: '/chat/[id]', params: { id: item.id } })
+                }
+              />
+            </Animated.View>
+          )}
+        />
+      )}
+    </ScreenContainer>
+  );
+}
+
+const styles = StyleSheet.create({
+  tabs: {
+    paddingHorizontal: spacing.lg,
+    marginTop: spacing.lg,
+  },
+  listContent: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.xxxl,
+  },
+});
