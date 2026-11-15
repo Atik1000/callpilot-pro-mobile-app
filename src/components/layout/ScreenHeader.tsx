@@ -16,7 +16,7 @@ interface ScreenHeaderProps {
 }
 
 /**
- * Black top header with rounded bottom corners, used by all main tab
+ * Blue, center-aligned top header with rounded bottom corners, used by all main tab
  * screens (Calls, Contacts, Messages, Alerts, Settings).
  */
 export function ScreenHeader({
@@ -31,22 +31,21 @@ export function ScreenHeader({
   const insets = useSafeAreaInsets();
   return (
     <View style={[styles.container, { paddingTop: insets.top + spacing.xl }]}>
-      <View style={styles.titleRow}>
-        <View style={styles.titles}>
-          <AppText variant="screenTitle" color={colors.headerText}>
-            {title}
+      <View style={styles.titles}>
+        <AppText variant="screenTitle" color={colors.headerText} align="center">
+          {title}
+        </AppText>
+        {subtitle ? (
+          <AppText
+            variant="supporting"
+            color={colors.headerTextSecondary}
+            align="center"
+            style={styles.subtitle}
+          >
+            {subtitle}
           </AppText>
-          {subtitle ? (
-            <AppText
-              variant="supporting"
-              color={colors.headerTextSecondary}
-              style={styles.subtitle}
-            >
-              {subtitle}
-            </AppText>
-          ) : null}
-        </View>
-        {rightElement}
+        ) : null}
+        {rightElement ? <View style={styles.extra}>{rightElement}</View> : null}
       </View>
       {showSearch && onSearchChange ? (
         <View style={styles.search}>
@@ -69,17 +68,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing.xl,
   },
-  titleRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    gap: spacing.md,
-  },
   titles: {
-    flex: 1,
+    alignItems: 'center',
   },
   subtitle: {
     marginTop: 2,
+  },
+  extra: {
+    marginTop: spacing.sm,
   },
   search: {
     marginTop: spacing.lg,

@@ -7,12 +7,11 @@ import Animated, {
   useSharedValue,
   withSequence,
   withSpring,
-  ZoomIn,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, spacing } from '../../theme';
 import { AppText } from '../ui/AppText';
-import { springs } from '../ui/motion';
+import { popIn, springs } from '../ui/motion';
 
 /** Tab bar props as expected by expo-router's vendored bottom-tabs navigator. */
 type BottomTabBarProps = Parameters<
@@ -52,7 +51,7 @@ function TabItem({ config: { label, Icon }, active, onPress }: TabItemProps) {
   useEffect(() => {
     if (active) {
       bounce.value = withSequence(
-        withSpring(1.22, springs.bouncy),
+        withSpring(1.1, springs.bouncy),
         withSpring(1, springs.gentle),
       );
     }
@@ -78,7 +77,7 @@ function TabItem({ config: { label, Icon }, active, onPress }: TabItemProps) {
         {label}
       </AppText>
       {active ? (
-        <Animated.View entering={ZoomIn.springify().damping(14)} style={styles.indicatorActive} />
+        <Animated.View entering={popIn()} style={styles.indicatorActive} />
       ) : (
         <View style={styles.indicator} />
       )}

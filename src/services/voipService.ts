@@ -1,3 +1,4 @@
+import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { PermissionsAndroid, Platform } from 'react-native';
 import { apiRequest } from './api';
 import { SERVICE_MODE } from './config';
@@ -8,8 +9,10 @@ import { SERVICE_MODE } from './config';
  * - GET  /organizations/me  -> organization phone number (outbound caller ID)
  * - GET  /me/               -> profile uid (sent as the X-Voice-Ext header)
  *
- * Uses @telnyx/react-native-voice-sdk (react-native-webrtc under the hood),
- * so it only works in a development/production build — not Expo Go or web.
+ * Two engines share one interface (VoipEngine):
+ * - this file: @telnyx/react-native-voice-sdk (native WebRTC) for dev/prod builds;
+ * - webVoipService.ts: the Telnyx browser SDK inside a hidden WebView (Expo
+ *   Go, which lacks native WebRTC) or a hidden iframe (web).
  */
 
 export type VoipStatus = 'unavailable' | 'offline' | 'connecting' | 'online';
@@ -31,10 +34,41 @@ export interface VoipListener {
   onStatus(status: VoipStatus, detail?: string): void;
   onIncoming(info: IncomingCallInfo): void;
   onCallPhase(phase: VoipCallPhase): void;
+  /** A call ended abnormally (rejected, busy, unreachable…); message is user-facing. */
+  onCallFailed?(message: string): void;
 }
 
-/** VoIP needs native WebRTC; web and mock mode fall back to simulated calls. */
-export const voipSupported = Platform.OS !== 'web' && SERVICE_MODE === 'live';
+/** True inside the Expo Go app, which lacks the native WebRTC modules. */
+export const isExpoGo =
+  Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
+
+/**
+ * Real calls work everywhere in live mode: native SDK on iOS/Android builds,
+ * the Telnyx browser SDK (WebView in Expo Go, iframe on web) otherwise.
+ */
+export const voipSupported = SERVICE_MODE === 'live';
+
+/** Calls run through the Telnyx browser SDK bridge (Expo Go or web). */
+export const usesWebVoipEngine = isExpoGo || Platform.OS === 'web';
+
+/** The native Telnyx SDK is usable (dev/production build, not Expo Go/web). */
+export const nativeVoipSupported = voipSupported && !usesWebVoipEngine;
+
+/** Common surface of the native and WebView calling engines. */
+export interface VoipEngine {
+  setListener(listener: VoipListener | null): void;
+  connect(): Promise<void>;
+  disconnect(): Promise<void>;
+  readonly isOnline: boolean;
+  startCall(destinationNumber: string): Promise<void>;
+  answer(): Promise<void>;
+  decline(): void;
+  hangup(): void;
+  setMuted(muted: boolean): void;
+  setHeld(held: boolean): Promise<void>;
+  sendDtmf(digit: string): void;
+  setSpeaker(on: boolean): void;
+}
 
 /**
  * Minimal local typings for @telnyx/react-native-voice-sdk. The SDK ships raw
@@ -59,6 +93,10 @@ interface TelnyxClient {
     event: 'telnyx.call.incoming',
     handler: (call: TelnyxCall, msg: { params?: { caller_id_number?: string; caller_id_name?: string } }) => void,
   ): void;
+  on(
+    event: 'telnyx.call.remoteEnded',
+    handler: (callId: string, reason: CallEndReason) => void,
+  ): void;
   connect(): Promise<void>;
   disconnect(): void | Promise<void>;
   newCall(options: {
@@ -69,8 +107,62 @@ interface TelnyxClient {
   }): Promise<TelnyxCall>;
 }
 
+export interface CallEndReason {
+  cause?: string;
+  causeCode?: number;
+  sipCode?: number;
+  sipReason?: string;
+}
+
+/**
+ * User-facing text for an abnormal hang-up, or null for a normal one.
+ * `wasActive`: the call connected, so a normal clear is just "call ended".
+ */
+export function describeCallEnd(reason: CallEndReason | null, wasActive: boolean): string | null {
+  if (!reason) return wasActive ? null : 'The call could not be connected.';
+  const cause = (reason.cause || '').toUpperCase();
+  if (cause === 'NORMAL_CLEARING' && wasActive) return null;
+  const known: Record<string, string> = {
+    USER_BUSY: 'The number is busy.',
+    NO_ANSWER: 'No answer.',
+    NO_USER_RESPONSE: 'No answer.',
+    CALL_REJECTED: 'The call was rejected.',
+    UNALLOCATED_NUMBER: 'That number does not exist. Check it includes the country code.',
+    INVALID_NUMBER_FORMAT: 'Invalid number format. Use the full number with country code, e.g. +44….',
+    NORMAL_TEMPORARY_FAILURE: 'The network could not connect the call. Try again.',
+    DESTINATION_OUT_OF_ORDER: 'The number is unreachable.',
+    ORIGINATOR_CANCEL: '',
+  };
+  const sipKnown: Record<number, string> = {
+    403: 'The call was refused by the phone network (SIP 403). Check the business line can call this destination.',
+    404: 'That number could not be found (SIP 404). Check it includes the country code.',
+    480: 'The call could not be connected (SIP 480 Temporarily Unavailable). Try again in a moment.',
+    486: 'The number is busy.',
+    487: '',
+    603: 'The call was declined.',
+  };
+  if (reason.sipCode && reason.sipCode in sipKnown && !(cause === 'NORMAL_CLEARING' && wasActive)) {
+    return sipKnown[reason.sipCode] || null;
+  }
+  if (cause in known) return known[cause] || null;
+  if (cause === 'NORMAL_CLEARING') return 'The call was ended before it connected.';
+  const sip = reason.sipCode ? ` (SIP ${reason.sipCode}${reason.sipReason ? ` ${reason.sipReason}` : ''})` : '';
+  return `Call failed: ${reason.cause || 'unknown reason'}${sip}.`;
+}
+
 interface TelnyxModule {
   TelnyxRTC: new (options: { login_token: string }) => TelnyxClient;
+}
+
+/**
+ * Same cleanup the dashboard applies before dialing: digits only, keeping a
+ * leading "+" (e.g. "+44 7700 900123" -> "+447700900123").
+ */
+export function toDialableNumber(value: string): string {
+  const trimmed = value.trim();
+  const digits = trimmed.replace(/\D/g, '');
+  if (!digits) return '';
+  return trimmed.startsWith('+') ? `+${digits}` : digits;
 }
 
 /** The backend wraps the Telnyx token in varying envelopes; unwrap them all. */
@@ -96,7 +188,7 @@ export function normalizeVoiceToken(payload: unknown): string | null {
   return null;
 }
 
-async function fetchVoiceToken(): Promise<string> {
+export async function fetchVoiceToken(): Promise<string> {
   const payload = await apiRequest<unknown>('/voice/api/token/', { method: 'POST' });
   const token = normalizeVoiceToken(payload);
   if (!token || token.split('.').length !== 3 || /[\s<>]/.test(token)) {
@@ -105,7 +197,66 @@ async function fetchVoiceToken(): Promise<string> {
   return token;
 }
 
-async function ensureMicrophonePermission(): Promise<void> {
+/**
+ * Caller ID + extension, fetched like the dashboard does (organization
+ * number and profile uid). Failures are non-fatal: Telnyx falls back to
+ * the connection's default caller ID.
+ */
+/** Some endpoints wrap the record in `data`; read the field either way. */
+type IdentityPayload = Record<string, unknown> & { data?: Record<string, unknown> };
+function pick(payload: IdentityPayload | null, key: string): string | undefined {
+  const value = payload?.[key] ?? payload?.data?.[key];
+  return typeof value === 'string' && value ? value : undefined;
+}
+
+export async function fetchCallIdentity(): Promise<{ callerId?: string; extensionUid?: string }> {
+  const [org, me] = await Promise.all([
+    apiRequest<IdentityPayload>('/organizations/me').catch((e) => {
+      console.warn('[voip] /organizations/me failed:', e instanceof Error ? e.message : e);
+      return null;
+    }),
+    apiRequest<IdentityPayload>('/me/').catch((e) => {
+      console.warn('[voip] /me/ failed:', e instanceof Error ? e.message : e);
+      return null;
+    }),
+  ]);
+  const identity = {
+    callerId: pick(org, 'phone_number') || undefined,
+    extensionUid: pick(me, 'uid') || undefined,
+  };
+  if (__DEV__) console.log('[voip] call identity', JSON.stringify(identity));
+  return identity;
+}
+
+export interface CallAuthorization {
+  callerId?: string;
+  /** SIP headers the CallPilot backend requires on every outbound call. */
+  headers: { name: string; value: string }[];
+}
+
+/**
+ * Per-call authorization, matching devfront.callpilot.pro: right before each
+ * outbound call, POST /voice/api/token/ again; its `call_session_proof` goes
+ * out as X-CallPilot-Session (and `extension_uid` as X-Voice-Ext). Calls
+ * without the proof are rejected by the backend with SIP 480.
+ */
+export async function authorizeOutboundCall(): Promise<CallAuthorization> {
+  const [session, identity] = await Promise.all([
+    apiRequest<Record<string, unknown>>('/voice/api/token/', { method: 'POST' }),
+    fetchCallIdentity(),
+  ]);
+  const proof = session?.call_session_proof;
+  if (typeof proof !== 'string' || !proof) {
+    throw new Error('The phone service did not authorize this call. Reconnect your business phone.');
+  }
+  const headers = [{ name: 'X-CallPilot-Session', value: proof }];
+  const ext = typeof session.extension_uid === 'string' ? session.extension_uid.trim() : '';
+  if (ext) headers.push({ name: 'X-Voice-Ext', value: ext });
+  if (__DEV__) console.log('[voip] call authorized', JSON.stringify({ ext: Boolean(ext), callerId: Boolean(identity.callerId) }));
+  return { callerId: identity.callerId, headers };
+}
+
+export async function ensureMicrophonePermission(): Promise<void> {
   if (Platform.OS !== 'android') return; // iOS prompts from getUserMedia.
   const granted = await PermissionsAndroid.request(
     PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
@@ -120,13 +271,17 @@ async function ensureMicrophonePermission(): Promise<void> {
   }
 }
 
-class VoipService {
+class NativeVoipService implements VoipEngine {
   private sdk: TelnyxModule | null = null;
   private inCallManager: any = null;
   private client: TelnyxClient | null = null;
   private clientReady = false;
   private currentCall: TelnyxCall | null = null;
   private incomingCall: TelnyxCall | null = null;
+  /** Hang-up reason from the last BYE, reported when the call ends. */
+  private endReason: CallEndReason | null = null;
+  private callWasActive = false;
+  private outbound = false;
   private listener: VoipListener | null = null;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private connecting = false;
@@ -139,7 +294,7 @@ class VoipService {
   /** Loads the native SDK; returns null when unavailable (Expo Go / web). */
   private loadSdk(): TelnyxModule | null {
     if (this.sdk) return this.sdk;
-    if (!voipSupported) return null;
+    if (!nativeVoipSupported) return null;
     try {
       // Lazy require keeps web/Expo Go bundles from crashing on import.
       // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -152,6 +307,10 @@ class VoipService {
 
   private getInCallManager(): any {
     if (this.inCallManager !== null) return this.inCallManager;
+    if (!nativeVoipSupported) {
+      this.inCallManager = undefined;
+      return undefined;
+    }
     try {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       this.inCallManager = require('react-native-incall-manager').default;
@@ -206,6 +365,10 @@ class VoipService {
           this.listener?.onStatus('offline', error?.message || 'Phone offline. Retrying…');
           this.scheduleReconnect();
         }
+      });
+
+      client.on('telnyx.call.remoteEnded', (_callId: string, reason: CallEndReason) => {
+        if (this.client === client) this.endReason = reason ?? null;
       });
 
       client.on('telnyx.call.incoming', (call: TelnyxCall, msg: any) => {
@@ -284,6 +447,7 @@ class VoipService {
           this.listener?.onCallPhase('connecting');
           break;
         case 'active':
+          this.callWasActive = true;
           this.listener?.onCallPhase('active');
           break;
         case 'held':
@@ -292,28 +456,18 @@ class VoipService {
         case 'dropped':
           this.listener?.onCallPhase('connecting'); // may reattach on reconnect
           break;
-        case 'ended':
+        case 'ended': {
+          // Only explain calls the remote side ended; our own hang-up is silent.
+          const outcome = this.outbound && this.endReason
+            ? describeCallEnd(this.endReason, this.callWasActive)
+            : null;
           this.finishCall();
           this.listener?.onCallPhase('ended');
+          if (outcome) this.listener?.onCallFailed?.(outcome);
           break;
+        }
       }
     });
-  }
-
-  /**
-   * Caller ID + extension, fetched like the dashboard does (organization
-   * number and profile uid). Failures are non-fatal: Telnyx falls back to
-   * the connection's default caller ID.
-   */
-  private async fetchCallIdentity(): Promise<{ callerId?: string; extensionUid?: string }> {
-    const [org, me] = await Promise.all([
-      apiRequest<{ phone_number?: string }>('/organizations/me').catch(() => null),
-      apiRequest<{ uid?: string }>('/me/').catch(() => null),
-    ]);
-    return {
-      callerId: org?.phone_number || undefined,
-      extensionUid: me?.uid || undefined,
-    };
   }
 
   async startCall(destinationNumber: string): Promise<void> {
@@ -324,17 +478,23 @@ class VoipService {
     if (this.currentCall || this.incomingCall) {
       throw new Error('Finish the current call before starting another one.');
     }
+    const target = toDialableNumber(destinationNumber);
+    if (!target) throw new Error('Enter a valid telephone number.');
     await ensureMicrophonePermission();
-    const identity = await this.fetchCallIdentity();
+    const auth = await authorizeOutboundCall();
+    if (this.client !== client || !this.clientReady) {
+      throw new Error('The phone connection changed while starting the call. Wait for Online, then try again.');
+    }
 
     const call = await client.newCall({
-      destinationNumber,
+      destinationNumber: target,
       audio: true,
-      callerIdNumber: identity.callerId,
-      customHeaders: identity.extensionUid
-        ? [{ name: 'X-Voice-Ext', value: identity.extensionUid }]
-        : undefined,
+      callerIdNumber: auth.callerId,
+      customHeaders: auth.headers,
     });
+    this.endReason = null;
+    this.callWasActive = false;
+    this.outbound = true;
     this.currentCall = call;
     this.watchCall(call);
     this.listener?.onCallPhase('dialing');
@@ -414,6 +574,9 @@ class VoipService {
   private finishCall(): void {
     this.currentCall = null;
     this.incomingCall = null;
+    this.endReason = null;
+    this.callWasActive = false;
+    this.outbound = false;
     const icm = this.getInCallManager();
     try {
       icm?.setForceSpeakerphoneOn(false);
@@ -422,4 +585,4 @@ class VoipService {
   }
 }
 
-export const voipService = new VoipService();
+export const nativeVoipService = new NativeVoipService();

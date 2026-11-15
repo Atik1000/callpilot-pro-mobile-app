@@ -2,7 +2,6 @@ import { Delete, MessageCircle, Phone } from 'lucide-react-native';
 import React, { useEffect, useMemo } from 'react';
 import { Alert, Pressable, StyleSheet, View } from 'react-native';
 import Animated, {
-  FadeInDown,
   FadeOut,
   useAnimatedStyle,
   useSharedValue,
@@ -14,7 +13,7 @@ import { StandaloneTabBar } from '../components/layout/BottomTabBar';
 import { DetailHeader } from '../components/layout/DetailHeader';
 import { ScreenContainer } from '../components/layout/ScreenContainer';
 import { AppText } from '../components/ui/AppText';
-import { PressableScale, springs } from '../components/ui/motion';
+import { PressableScale, rise, springs } from '../components/ui/motion';
 import { BUSINESS_NUMBER } from '../data/constants';
 import { useCommunications } from '../hooks/useCommunications';
 import { findContactByPhone, useContacts } from '../hooks/useContacts';
@@ -34,6 +33,7 @@ export default function KeypadScreen() {
   const deleteDigit = useCallStore((s) => s.deleteDigit);
   const clearDialedNumber = useCallStore((s) => s.clearDialedNumber);
   const voipStatus = useCallStore((s) => s.voipStatus);
+  const voipDetail = useCallStore((s) => s.voipDetail);
 
   const phoneStatus =
     voipStatus === 'online'
@@ -41,7 +41,7 @@ export default function KeypadScreen() {
       : voipStatus === 'connecting'
         ? 'Connecting phone…'
         : voipStatus === 'offline'
-          ? 'Phone offline — retrying'
+          ? `Phone offline — ${voipDetail || 'retrying'}`
           : 'Simulated calls';
 
   const { data: contacts } = useContacts();
@@ -118,7 +118,7 @@ export default function KeypadScreen() {
         <View style={styles.matchRow}>
           {match ? (
             <Animated.View
-              entering={FadeInDown.springify().damping(15)}
+              entering={rise()}
               exiting={FadeOut.duration(120)}
               style={styles.matchInner}
             >
@@ -138,7 +138,7 @@ export default function KeypadScreen() {
       <DialPad onDigit={appendDigit} onLongZero={() => appendDigit('+')} />
 
       <Animated.View
-        entering={FadeInDown.delay(260).springify().damping(17)}
+        entering={rise(130)}
         style={styles.actions}
       >
         <PressableScale

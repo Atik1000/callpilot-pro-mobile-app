@@ -1,7 +1,7 @@
 import { useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
-import Animated, { FadeInDown, LinearTransition, SlideOutRight } from 'react-native-reanimated';
+import Animated, { SlideOutRight } from 'react-native-reanimated';
 import { AlertCard } from '../../components/alerts/AlertCard';
 import { ScreenContainer } from '../../components/layout/ScreenContainer';
 import { ScreenHeader } from '../../components/layout/ScreenHeader';
@@ -10,7 +10,7 @@ import { EmptyState } from '../../components/ui/EmptyState';
 import { ErrorState } from '../../components/ui/ErrorState';
 import { LoadingState } from '../../components/ui/LoadingState';
 import { SegmentedTabs } from '../../components/ui/SegmentedTabs';
-import { staggerDelay } from '../../components/ui/motion';
+import { listEnter, listLayout } from '../../components/ui/motion';
 import { useAlertStore } from '../../store/alertStore';
 import { spacing } from '../../theme';
 import { AppAlert } from '../../types';
@@ -61,7 +61,7 @@ export default function AlertsScreen() {
         <Animated.FlatList
           data={filtered}
           keyExtractor={(a) => a.id}
-          itemLayoutAnimation={LinearTransition.springify().damping(19)}
+          itemLayoutAnimation={listLayout}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
           ListEmptyComponent={
@@ -72,7 +72,7 @@ export default function AlertsScreen() {
           }
           renderItem={({ item, index }) => (
             <Animated.View
-              entering={FadeInDown.delay(staggerDelay(index)).springify().damping(19)}
+              entering={listEnter(index)}
               exiting={SlideOutRight.duration(220)}
             >
               <AlertCard

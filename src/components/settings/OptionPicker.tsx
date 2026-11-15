@@ -1,7 +1,8 @@
 import { Check } from 'lucide-react-native';
 import React from 'react';
 import { Modal, Pressable, StyleSheet, View } from 'react-native';
-import Animated, { ZoomIn } from 'react-native-reanimated';
+import Animated from 'react-native-reanimated';
+import { popIn } from '../ui/motion';
 import { colors, radius, spacing } from '../../theme';
 import { AppText } from '../ui/AppText';
 import { Divider } from '../ui/Divider';
@@ -27,7 +28,7 @@ export function OptionPicker<T extends string>({
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <Pressable style={styles.backdrop} onPress={onClose}>
-        <Animated.View entering={ZoomIn.springify().damping(16)}>
+        <Animated.View entering={popIn()}>
           <Pressable style={styles.sheet} onPress={() => undefined}>
           <AppText variant="cardTitle" style={styles.title}>
             {title}

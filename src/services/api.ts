@@ -11,8 +11,13 @@ import { Platform } from 'react-native';
  * - GET/POST/PATCH /jigsaw/* (contacts, messages, alerts, settings, documents)
  * - GET  /voice/api/calls/, /voice/api/voicemails/
  */
+/**
+ * Same backend as devfront.callpilot.pro (the Jigsaw workspace). Production
+ * (api.callpilot.pro) has no /jigsaw/* routes yet; set
+ * EXPO_PUBLIC_API_URL=https://api.callpilot.pro/api/v1 to target it anyway.
+ */
 export const API_BASE_URL =
-  process.env.EXPO_PUBLIC_API_URL ?? 'https://devapi.callpilot.pro/api/v1';
+  process.env.EXPO_PUBLIC_API_URL || 'https://devapi.callpilot.pro/api/v1';
 
 const ACCESS_KEY = 'callpilot.access';
 const REFRESH_KEY = 'callpilot.refresh';

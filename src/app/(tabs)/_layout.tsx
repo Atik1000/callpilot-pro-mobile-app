@@ -17,7 +17,7 @@ export default function TabsLayout() {
   return (
     <Tabs
       backBehavior="initialRoute"
-      screenOptions={{ headerShown: false }}
+      screenOptions={{ headerShown: false, animation: 'fade' }}
       tabBar={(props) => <BottomTabBar {...props} />}
     >
       <Tabs.Screen name="calls" options={{ title: 'Calls' }} />

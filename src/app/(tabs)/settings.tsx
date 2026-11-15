@@ -2,7 +2,8 @@ import { useRouter } from 'expo-router';
 import { ChevronDown } from 'lucide-react-native';
 import React, { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+import Animated from 'react-native-reanimated';
+import { rise } from '../../components/ui/motion';
 import { ScreenContainer } from '../../components/layout/ScreenContainer';
 import { ScreenHeader } from '../../components/layout/ScreenHeader';
 import { OptionPicker } from '../../components/settings/OptionPicker';
@@ -62,7 +63,7 @@ export default function SettingsScreen() {
 
   return (
     <ScreenContainer header={header} scrollable>
-      <Animated.View entering={FadeInDown.delay(40).springify().damping(19)}>
+      <Animated.View entering={rise(20)}>
       <SectionHeader title="My status" />
       <SegmentedTabs
         tabs={STATUS_TABS}
@@ -71,7 +72,7 @@ export default function SettingsScreen() {
       />
       </Animated.View>
 
-      <Animated.View entering={FadeInDown.delay(120).springify().damping(19)}>
+      <Animated.View entering={rise(60)}>
       <SectionHeader title="Business hours" />
       <Card padded={false}>
         <Pressable
@@ -99,7 +100,7 @@ export default function SettingsScreen() {
       </Card>
       </Animated.View>
 
-      <Animated.View entering={FadeInDown.delay(200).springify().damping(19)}>
+      <Animated.View entering={rise(100)}>
       <SectionHeader title="Calls" />
       <Card>
         <ToggleRow
@@ -125,7 +126,7 @@ export default function SettingsScreen() {
       </Card>
       </Animated.View>
 
-      <Animated.View entering={FadeInDown.delay(280).springify().damping(19)}>
+      <Animated.View entering={rise(140)}>
       <SectionHeader title="Security" />
       <Card>
         <ToggleRow

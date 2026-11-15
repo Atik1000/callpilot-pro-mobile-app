@@ -5,18 +5,16 @@ import { Alert, StyleSheet, View } from 'react-native';
 import Animated, {
   Easing,
   FadeIn,
-  FadeInDown,
   useAnimatedStyle,
   useSharedValue,
   withRepeat,
   withSequence,
   withTiming,
-  ZoomIn,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppText } from '../components/ui/AppText';
 import { Avatar } from '../components/ui/Avatar';
-import { PressableScale, PulsingDot } from '../components/ui/motion';
+import { popIn, PressableScale, PulsingDot, rise } from '../components/ui/motion';
 import { useCallStore } from '../store/callStore';
 import { colors, fontFamily, spacing } from '../theme';
 
@@ -79,7 +77,7 @@ export default function IncomingCallScreen() {
       </Animated.View>
 
       <View style={styles.caller}>
-        <Animated.View entering={ZoomIn.delay(80).springify().damping(13)}>
+        <Animated.View entering={popIn(40)}>
           <Animated.View style={[styles.avatarRing, ringStyle]}>
             <Avatar
               name={incomingCall.displayName}
@@ -90,7 +88,7 @@ export default function IncomingCallScreen() {
           </Animated.View>
         </Animated.View>
         <Animated.View
-          entering={FadeInDown.delay(160).springify().damping(18)}
+          entering={rise(80)}
           style={styles.callerTexts}
         >
           <AppText style={styles.callerName} color={colors.headerText}>
@@ -103,7 +101,7 @@ export default function IncomingCallScreen() {
       </View>
 
       <View style={[styles.actions, { paddingBottom: insets.bottom + spacing.xxl }]}>
-        <Animated.View entering={ZoomIn.delay(300).springify().damping(13)} style={styles.action}>
+        <Animated.View entering={popIn(150)} style={styles.action}>
           <PressableScale
             accessibilityRole="button"
             accessibilityLabel="Decline call"
@@ -117,7 +115,7 @@ export default function IncomingCallScreen() {
             Decline
           </AppText>
         </Animated.View>
-        <Animated.View entering={ZoomIn.delay(380).springify().damping(13)} style={styles.action}>
+        <Animated.View entering={popIn(190)} style={styles.action}>
           <PressableScale
             accessibilityRole="button"
             accessibilityLabel="Answer call"
@@ -139,7 +137,7 @@ export default function IncomingCallScreen() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: colors.primary,
+    backgroundColor: colors.primaryDark,
   },
   statusRow: {
     flexDirection: 'row',

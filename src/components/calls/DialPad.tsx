@@ -1,6 +1,7 @@
 import React from 'react';
 import { StyleSheet, View, useWindowDimensions } from 'react-native';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+import Animated from 'react-native-reanimated';
+import { rise } from '../ui/motion';
 import { spacing } from '../../theme';
 import { DialPadKey } from './DialPadKey';
 
@@ -35,7 +36,7 @@ export function DialPad({ onDigit, onLongZero }: DialPadProps) {
       {KEYS.map((row, i) => (
         <Animated.View
           key={i}
-          entering={FadeInDown.delay(60 + i * 45).springify().damping(18)}
+          entering={rise(20 + i * 18, 220)}
           style={styles.row}
         >
           {row.map(({ digit, letters }) => (

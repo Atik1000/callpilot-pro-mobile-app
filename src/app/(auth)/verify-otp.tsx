@@ -10,13 +10,12 @@ import {
   View,
 } from 'react-native';
 import Animated, {
-  FadeInDown,
   useAnimatedStyle,
   useSharedValue,
   withSequence,
   withTiming,
-  ZoomIn,
 } from 'react-native-reanimated';
+import { rise, popIn } from '../../components/ui/motion';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppButton } from '../../components/ui/AppButton';
 import { AppText } from '../../components/ui/AppText';
@@ -106,7 +105,7 @@ export default function VerifyOtpScreen() {
           <ArrowLeft size={22} color={colors.headerText} />
         </Pressable>
 
-        <Animated.View entering={FadeInDown.delay(60).springify().damping(18)}>
+        <Animated.View entering={rise(30)}>
           <AppText variant="screenTitle" color={colors.headerText} style={styles.title}>
             Enter the 6-digit code
           </AppText>
@@ -123,7 +122,7 @@ export default function VerifyOtpScreen() {
               return (
                 <Animated.View
                   key={i}
-                  entering={ZoomIn.delay(140 + i * 55).springify().damping(14)}
+                  entering={popIn(70 + i * 25)}
                   style={[styles.box, activeBox && styles.boxActive, filled && styles.boxFilled]}
                 >
                   <AppText style={styles.boxDigit} color={colors.headerText}>
@@ -199,7 +198,7 @@ export default function VerifyOtpScreen() {
 const styles = StyleSheet.create({
   flex: {
     flex: 1,
-    backgroundColor: colors.primary,
+    backgroundColor: colors.primaryDark,
   },
   content: {
     flex: 1,
@@ -234,7 +233,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   boxActive: {
-    borderColor: colors.secondary,
+    borderColor: '#FFFFFF',
     borderWidth: 2,
   },
   boxFilled: {

@@ -13,6 +13,8 @@ import { StatusBar } from 'expo-status-bar';
 import React, { useEffect, useRef } from 'react';
 import { Platform, StyleSheet, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { VoipWebBridge } from '../components/voip/VoipWebBridge';
+import { usesWebVoipEngine, voipSupported } from '../services/voipService';
 import { useAuthStore } from '../store/authStore';
 import { useCallStore } from '../store/callStore';
 
@@ -91,7 +93,14 @@ export default function RootLayout() {
   const app = (
     <>
       <StatusBar style="light" />
-      <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>
+      <Stack
+        screenOptions={{
+          headerShown: false,
+          // iOS: native push with swipe-back. Android: the same smooth
+          // parallax slide instead of the default Material transition.
+          animation: Platform.OS === 'android' ? 'ios_from_right' : 'default',
+        }}
+      >
           <Stack.Screen name="index" />
           <Stack.Screen name="(auth)" options={{ animation: 'fade' }} />
           {/* Every signed-in screen is guarded, so a reload on a detail
@@ -111,6 +120,8 @@ export default function RootLayout() {
             <Stack.Screen name="contact/[id]" />
           </Stack.Protected>
       </Stack>
+      {/* Expo Go: hidden WebView that runs the Telnyx browser SDK. */}
+      {signedIn && usesWebVoipEngine && voipSupported ? <VoipWebBridge /> : null}
     </>
   );
 
@@ -135,7 +146,7 @@ const styles = StyleSheet.create({
   webBackdrop: {
     flex: 1,
     alignItems: 'center',
-    backgroundColor: '#101013',
+    backgroundColor: '#0B1B3F',
   },
   phoneFrame: {
     flex: 1,

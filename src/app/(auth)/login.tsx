@@ -10,7 +10,8 @@ import {
   StyleSheet,
   View,
 } from 'react-native';
-import Animated, { FadeInDown, ZoomIn } from 'react-native-reanimated';
+import Animated from 'react-native-reanimated';
+import { rise, popIn } from '../../components/ui/motion';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppButton } from '../../components/ui/AppButton';
 import { AppInput } from '../../components/ui/AppInput';
@@ -57,7 +58,7 @@ export default function LoginScreen() {
         showsVerticalScrollIndicator={false}
       >
         <Animated.View
-          entering={ZoomIn.delay(80).springify().damping(13)}
+          entering={popIn(40)}
           style={styles.logo}
         >
           <Image
@@ -66,7 +67,7 @@ export default function LoginScreen() {
             contentFit="contain"
           />
         </Animated.View>
-        <Animated.View entering={FadeInDown.delay(160).springify().damping(18)}>
+        <Animated.View entering={rise(80)}>
           <AppText variant="screenTitle" color={colors.headerText} style={styles.title}>
             CallPilot
           </AppText>
@@ -75,7 +76,7 @@ export default function LoginScreen() {
           </AppText>
         </Animated.View>
 
-        <Animated.View entering={FadeInDown.delay(260).springify().damping(18)}>
+        <Animated.View entering={rise(130)}>
         <Controller
           control={control}
           name="email"
@@ -137,7 +138,7 @@ export default function LoginScreen() {
         </Animated.View>
 
         <Animated.View
-          entering={FadeInDown.delay(380).springify().damping(18)}
+          entering={rise(190)}
           style={styles.hintRow}
         >
           <View style={styles.hintDot} />
@@ -159,7 +160,7 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   flex: {
     flex: 1,
-    backgroundColor: colors.primary,
+    backgroundColor: colors.primaryDark,
   },
   content: {
     flexGrow: 1,

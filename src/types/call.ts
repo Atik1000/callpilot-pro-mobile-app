@@ -5,6 +5,8 @@ export type CallChannel = 'business' | 'whatsapp';
 export interface Call {
   id: string;
   contactId?: string;
+  /** Caller name sent with the call record, when the API knows it. */
+  contactName?: string;
   phoneNumber: string;
 
   direction: CallDirection;

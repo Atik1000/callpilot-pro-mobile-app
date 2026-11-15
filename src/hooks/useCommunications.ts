@@ -17,13 +17,25 @@ export function useCommunications() {
 
   const startCall = useCallback(
     (phoneNumber: string, contact?: Contact | null) => {
-      router.push('/active-call');
-      beginCall({ phoneNumber, contact }).catch((error: unknown) => {
-        Alert.alert(
-          'Call failed',
-          error instanceof Error ? error.message : 'Could not start the call.',
+      const callFromDevice = () => {
+        Linking.openURL(`tel:${phoneNumber.replace(/[^\d+]/g, '')}`).catch(() =>
+          Alert.alert('Could not call', 'This device cannot place phone calls.'),
         );
-      });
+      };
+
+      beginCall({ phoneNumber, contact })
+        .then(() => router.push('/active-call'))
+        .catch((error: unknown) => {
+          // Business line unavailable (e.g. still connecting): offer the SIM.
+          Alert.alert(
+            'Call failed',
+            error instanceof Error ? error.message : 'Could not start the call.',
+            [
+              { text: 'Call from this phone', onPress: callFromDevice },
+              { text: 'OK', style: 'cancel' },
+            ],
+          );
+        });
     },
     [router, beginCall],
   );

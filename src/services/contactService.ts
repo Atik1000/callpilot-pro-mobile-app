@@ -1,11 +1,13 @@
 import { ATSActivity, ATSDocument, Contact } from '../types';
 import { mockContacts } from '../data/mockContacts';
 import { mockActivity, mockDocuments } from '../data/mockATS';
-import { jigsaw } from './api';
+import { ApiError, apiRequest, jigsaw } from './api';
 import { SERVICE_MODE, mockDelay } from './config';
 import {
   ApiContact,
+  ApiOrgContact,
   mapActivity,
+  mapOrgContact,
   mapContact,
   mapDocument,
 } from './mappers';
@@ -35,23 +37,49 @@ export interface ContactSyncJob {
 
 const CONTACTS_PAGE_SIZE = 300;
 
+/** Production has no /jigsaw/* routes (dev-only); they answer 404 there. */
+function isNotFound(error: unknown): boolean {
+  return error instanceof ApiError && error.status === 404;
+}
+
+/** Production contacts, same request as the dashboard's phone page. */
+async function getOrgContacts(q?: string): Promise<Contact[]> {
+  const params = new URLSearchParams({ page: '1', page_size: '100' });
+  if (q && q.length >= 2) params.set('search', q);
+  const data = await apiRequest<unknown>(`/contacts/?${params.toString()}`);
+  const list = Array.isArray(data)
+    ? data
+    : ((data as { results?: unknown[]; contacts?: unknown[] } | null)?.results ??
+      (data as { contacts?: unknown[] } | null)?.contacts ??
+      []);
+  return (list as ApiOrgContact[]).map(mapOrgContact);
+}
+
 const liveContactService = {
   /** Lists ATS contacts; `query` searches server-side (name/number/email). */
   async getContacts(query?: string): Promise<Contact[]> {
     const q = query?.trim();
     const params = q && q.length >= 2 ? `&q=${encodeURIComponent(q)}` : '';
-    const data = await jigsaw<ContactListResponse>(
-      `contacts/?limit=${CONTACTS_PAGE_SIZE}${params}`,
-    );
-    return (data.results ?? []).map(mapContact);
+    try {
+      const data = await jigsaw<ContactListResponse>(
+        `contacts/?limit=${CONTACTS_PAGE_SIZE}${params}`,
+      );
+      return (data.results ?? []).map(mapContact);
+    } catch (error) {
+      if (!isNotFound(error)) throw error;
+      return getOrgContacts(q);
+    }
   },
 
   async getContactById(id: string): Promise<Contact | undefined> {
     try {
       const data = await jigsaw<ApiContact>(`contacts/${encodeURIComponent(id)}/`);
       return mapContact(data);
-    } catch {
-      return undefined;
+    } catch (error) {
+      if (!isNotFound(error)) return undefined;
+      return apiRequest<ApiOrgContact>(`/contacts/${encodeURIComponent(id)}/`)
+        .then(mapOrgContact)
+        .catch(() => undefined);
     }
   },
 

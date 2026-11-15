@@ -16,7 +16,7 @@ interface DetailHeaderProps {
 }
 
 /**
- * Black detail header with a back button — used by Keypad, Contact
+ * Blue, center-aligned detail header with a back button — used by Keypad, Contact
  * Record and Chat Details.
  */
 export function DetailHeader({
@@ -33,26 +33,39 @@ export function DetailHeader({
   return (
     <View style={[styles.container, { paddingTop: insets.top + spacing.md }]}>
       <View style={styles.row}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-          onPress={goBack}
-          hitSlop={10}
-          style={({ pressed }) => [styles.back, pressed && styles.pressed]}
-        >
-          <ArrowLeft size={22} color={colors.headerText} />
-        </Pressable>
+        <View style={styles.side}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+            onPress={goBack}
+            hitSlop={10}
+            style={({ pressed }) => [styles.back, pressed && styles.pressed]}
+          >
+            <ArrowLeft size={22} color={colors.headerText} />
+          </Pressable>
+        </View>
         <View style={styles.titles}>
-          <AppText variant="screenTitle" color={colors.headerText} style={styles.title}>
+          <AppText
+            variant="screenTitle"
+            color={colors.headerText}
+            align="center"
+            numberOfLines={1}
+            style={styles.title}
+          >
             {title}
           </AppText>
           {subtitle ? (
-            <AppText variant="supporting" color={colors.headerTextSecondary}>
+            <AppText
+              variant="supporting"
+              color={colors.headerTextSecondary}
+              align="center"
+              numberOfLines={2}
+            >
               {subtitle}
             </AppText>
           ) : null}
         </View>
-        {rightElement}
+        <View style={[styles.side, styles.sideRight]}>{rightElement}</View>
       </View>
       {children}
     </View>
@@ -72,9 +85,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.md,
   },
+  side: {
+    width: 44,
+    alignItems: 'flex-start',
+  },
+  sideRight: {
+    alignItems: 'flex-end',
+  },
   back: {
     width: 36,
     height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.headerControl,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -83,6 +105,7 @@ const styles = StyleSheet.create({
   },
   titles: {
     flex: 1,
+    alignItems: 'center',
   },
   title: {
     fontSize: 22,
