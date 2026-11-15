@@ -36,7 +36,7 @@ const backgrounds: Record<AppButtonVariant, string> = {
 const labelColors: Record<AppButtonVariant, string> = {
   primary: '#FFFFFF',
   secondary: colors.textPrimary,
-  light: colors.textPrimary,
+  light: colors.primary,
   accent: colors.secondary,
   danger: '#FFFFFF',
 };

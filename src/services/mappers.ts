@@ -12,7 +12,7 @@ import {
   Voicemail,
 } from '../types';
 
-/* ---------- raw API shapes (as returned by devapi.callpilot.pro) ---------- */
+/* ---------- raw API shapes (as returned by the CallPilot API) ---------- */
 
 export interface ApiContact {
   uid: string;
@@ -63,6 +63,8 @@ export interface ApiCall {
   has_voicemail?: boolean;
   contact_uid?: string | null;
   contact?: ApiContact | null;
+  /** Name the dashboard shows for the caller. */
+  contact_name?: string | null;
   hangup_cause?: string;
 }
 
@@ -84,9 +86,12 @@ export interface ApiVoicemail {
   contact_uid?: string | null;
   number?: string;
   from_number?: string;
+  /** Field name used by the dashboard's voicemail feed. */
+  from?: string;
   duration?: number;
   transcript?: string;
   read?: boolean;
+  is_read?: boolean;
   created_at?: string;
 }
 
@@ -133,6 +138,43 @@ export function mapContact(api: ApiContact): Contact {
     jobTitle: api.skills?.[0],
     isFavourite: Boolean(api.favourite),
     atsId: api.ats_id || undefined,
+    atsStatus: api.status || undefined,
+    lastContact: api.created_at ? toIso(api.created_at) : undefined,
+  };
+}
+
+/** Contact as returned by production `/contacts/` (dashboard phone page). */
+export interface ApiOrgContact {
+  id: number | string;
+  first_name?: string;
+  last_name?: string;
+  full_name?: string;
+  phone?: string | null;
+  email?: string;
+  company_name?: string;
+  origin?: string | null;
+  external_id?: string | null;
+  candidate_id?: string | null;
+  status?: string;
+  created_at?: string;
+}
+
+export function mapOrgContact(api: ApiOrgContact): Contact {
+  const name =
+    api.full_name ||
+    [api.first_name, api.last_name].filter(Boolean).join(' ').trim() ||
+    api.email ||
+    api.phone ||
+    'Unknown contact';
+  return {
+    id: String(api.id),
+    name,
+    phone: api.phone ?? '',
+    email: api.email || undefined,
+    category: toCategory(api.origin ?? (api.candidate_id ? 'candidate' : 'contact')),
+    company: api.company_name || undefined,
+    isFavourite: false,
+    atsId: api.candidate_id || api.external_id || undefined,
     atsStatus: api.status || undefined,
     lastContact: api.created_at ? toIso(api.created_at) : undefined,
   };
@@ -190,7 +232,8 @@ export function mapCall(api: ApiCall, missed: boolean): Call {
   return {
     id: api.uid,
     contactId: api.contact?.uid ?? api.contact_uid ?? undefined,
-    phoneNumber: api.number,
+    contactName: api.contact_name || api.contact?.name || undefined,
+    phoneNumber: api.number ?? '',
     direction: missed ? 'missed' : api.direction === 'inbound' ? 'incoming' : 'outgoing',
     channel: 'business',
     durationSeconds: api.duration ?? 0,
@@ -288,12 +331,12 @@ export function mapVoicemail(api: ApiVoicemail): Voicemail {
   return {
     id: api.uid,
     contactId: api.contact_uid ?? undefined,
-    phoneNumber: api.number ?? api.from_number ?? '',
+    phoneNumber: api.number ?? api.from_number ?? api.from ?? '',
     durationSeconds: api.duration ?? 0,
     timestamp: toIso(api.created_at),
     transcript: api.transcript ?? 'Transcript not available yet.',
     savedToATS: Boolean(api.contact_uid),
-    consultantNotified: Boolean(api.read),
+    consultantNotified: Boolean(api.read ?? api.is_read),
   };
 }
 

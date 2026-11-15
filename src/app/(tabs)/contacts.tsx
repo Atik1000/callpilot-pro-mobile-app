@@ -2,7 +2,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import React, { useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
-import Animated, { FadeInDown, FadeInRight, LinearTransition } from 'react-native-reanimated';
+import Animated from 'react-native-reanimated';
 import { ContactListItem } from '../../components/contacts/ContactListItem';
 import { FavouriteContact } from '../../components/contacts/FavouriteContact';
 import { ScreenContainer } from '../../components/layout/ScreenContainer';
@@ -15,7 +15,7 @@ import { ErrorState } from '../../components/ui/ErrorState';
 import { LoadingState } from '../../components/ui/LoadingState';
 import { SectionHeader } from '../../components/ui/SectionHeader';
 import { SegmentedTabs } from '../../components/ui/SegmentedTabs';
-import { staggerDelay } from '../../components/ui/motion';
+import { listEnter } from '../../components/ui/motion';
 import { useCommunications } from '../../hooks/useCommunications';
 import { useContacts, useDebouncedValue } from '../../hooks/useContacts';
 import { contactService } from '../../services/contactService';
@@ -130,7 +130,6 @@ export default function ContactsScreen() {
         <Animated.FlatList
           data={groups}
           keyExtractor={(g) => g.letter}
-          itemLayoutAnimation={LinearTransition.springify().damping(19)}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
           ListHeaderComponent={
@@ -149,7 +148,7 @@ export default function ContactsScreen() {
                     {favourites.map((contact, index) => (
                       <Animated.View
                         key={contact.id}
-                        entering={FadeInRight.delay(staggerDelay(index, 70)).springify().damping(17)}
+                        entering={listEnter(index)}
                       >
                         <FavouriteContact
                           contact={contact}
@@ -193,7 +192,7 @@ export default function ContactsScreen() {
           }
           renderItem={({ item, index: groupIndex }) => (
             <Animated.View
-              entering={FadeInDown.delay(staggerDelay(groupIndex, 70)).springify().damping(19)}
+              entering={listEnter(groupIndex)}
             >
               <Card padded={false} style={styles.groupCard}>
                 <AppText variant="bodyMedium" style={styles.groupLetter}>

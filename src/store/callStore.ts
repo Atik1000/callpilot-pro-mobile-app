@@ -1,3 +1,4 @@
+import { Alert } from 'react-native';
 import { create } from 'zustand';
 import {
   ActiveCall,
@@ -9,12 +10,19 @@ import {
 import { callService } from '../services/callService';
 import {
   IncomingCallInfo,
-  voipService,
-  voipSupported,
+  nativeVoipService,
+  usesWebVoipEngine,
   VoipCallPhase,
+  VoipEngine,
   VoipStatus,
+  voipSupported,
 } from '../services/voipService';
+import { webVoipService } from '../services/webVoipService';
+
 import { formatPhone } from '../utils/formatPhone';
+
+/** Expo Go and web have no native WebRTC SDK, so they use the browser-SDK bridge. */
+const voipService: VoipEngine = usesWebVoipEngine ? webVoipService : nativeVoipService;
 
 type LoadStatus = 'idle' | 'loading' | 'ready' | 'error';
 
@@ -146,6 +154,10 @@ export const useCallStore = create<CallState>((set, get) => {
       });
     },
 
+    onCallFailed: (message: string) => {
+      Alert.alert('Call ended', message);
+    },
+
     onCallPhase: (phase: VoipCallPhase) => {
       if (phase === 'ended') {
         const { activeCall, incomingCall } = get();
@@ -193,20 +205,25 @@ export const useCallStore = create<CallState>((set, get) => {
     load: async () => {
       if (get().status === 'loading') return;
       set({ status: get().status === 'ready' ? 'ready' : 'loading' });
-      try {
-        const [history, voicemails] = await Promise.all([
-          callService.getCalls(),
-          callService.getVoicemails(),
-        ]);
-        set({
-          calls: history.calls,
-          callContacts: history.contacts,
-          voicemails,
-          status: 'ready',
-        });
-      } catch {
+      // Calls and voicemails load independently: one failing endpoint must
+      // not blank the whole screen.
+      const [history, voicemails] = await Promise.allSettled([
+        callService.getCalls(),
+        callService.getVoicemails(),
+      ]);
+      if (history.status === 'rejected') console.warn('[calls] history failed:', history.reason);
+      if (voicemails.status === 'rejected') console.warn('[calls] voicemails failed:', voicemails.reason);
+      if (history.status === 'rejected' && voicemails.status === 'rejected') {
         if (get().status !== 'ready') set({ status: 'error' });
+        return;
       }
+      set({
+        ...(history.status === 'fulfilled'
+          ? { calls: history.value.calls, callContacts: history.value.contacts }
+          : {}),
+        ...(voicemails.status === 'fulfilled' ? { voicemails: voicemails.value } : {}),
+        status: 'ready',
+      });
     },
 
     markVoicemailRead: (id) => {
@@ -256,7 +273,12 @@ export const useCallStore = create<CallState>((set, get) => {
         }
         return;
       }
-      // Simulated call (web, Expo Go, mock mode, or phone offline).
+      if (voipSupported) {
+        throw new Error(
+          get().voipDetail || 'Phone is still connecting. Wait for "Phone online" and retry.',
+        );
+      }
+      // Simulated call (web or mock mode — no phone line).
       set({
         activeCall: buildActiveCall(phoneNumber, contact),
         callPhase: null,

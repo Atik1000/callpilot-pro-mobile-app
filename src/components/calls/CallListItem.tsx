@@ -44,7 +44,8 @@ export function CallListItem({ call, contact, onPress, onAddUnknown, onCallBack 
     ? contact.company && contact.category === 'client'
       ? `${contact.name} – ${contact.company}`
       : contact.name
-    : formatPhone(call.phoneNumber);
+    : call.contactName || formatPhone(call.phoneNumber);
+  const avatarName = contact?.name ?? call.contactName;
 
   return (
     // The call-back button must be a sibling of the pressable area —
@@ -57,8 +58,8 @@ export function CallListItem({ call, contact, onPress, onAddUnknown, onCallBack 
           onPress={onPress}
           style={({ pressed }) => [styles.main, pressed && styles.pressed]}
         >
-          {contact ? (
-            <Avatar name={contact.name} size={46} />
+          {avatarName ? (
+            <Avatar name={avatarName} size={46} />
           ) : (
             <View style={styles.unknownAvatar}>
               <PhoneMissed size={18} color={colors.secondary} />
@@ -71,7 +72,7 @@ export function CallListItem({ call, contact, onPress, onAddUnknown, onCallBack 
             <AppText variant="supporting" color={colors.textSecondary} numberOfLines={1}>
               {buildSubtitle(call, contact)}
             </AppText>
-            {contact && call.phoneNumber ? (
+            {avatarName && call.phoneNumber ? (
               <AppText variant="caption" color={colors.textSecondary} numberOfLines={1}>
                 {formatPhone(call.phoneNumber)}
               </AppText>

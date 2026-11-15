@@ -3,7 +3,6 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import Animated, {
   Easing,
-  FadeInDown,
   FadeOut,
   useAnimatedStyle,
   useSharedValue,
@@ -16,7 +15,7 @@ import { AppButton } from '../ui/AppButton';
 import { AppText } from '../ui/AppText';
 import { Avatar } from '../ui/Avatar';
 import { Card } from '../ui/Card';
-import { PressableScale } from '../ui/motion';
+import { PressableScale, rise } from '../ui/motion';
 
 interface VoicemailCardProps {
   voicemail: Voicemail;
@@ -107,7 +106,7 @@ export function VoicemailCard({
 
       {expanded ? (
         <Animated.View
-          entering={FadeInDown.duration(260).springify().damping(19)}
+          entering={rise()}
           exiting={FadeOut.duration(140)}
           style={styles.body}
         >

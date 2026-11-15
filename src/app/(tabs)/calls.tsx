@@ -2,7 +2,7 @@ import { useRouter } from 'expo-router';
 import { Phone } from 'lucide-react-native';
 import React, { useEffect, useMemo, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
-import Animated, { FadeInDown, LinearTransition, ZoomIn } from 'react-native-reanimated';
+import Animated from 'react-native-reanimated';
 import { CallListItem } from '../../components/calls/CallListItem';
 import { VoicemailCard } from '../../components/calls/VoicemailCard';
 import { ScreenContainer } from '../../components/layout/ScreenContainer';
@@ -14,7 +14,7 @@ import { ErrorState } from '../../components/ui/ErrorState';
 import { LoadingState } from '../../components/ui/LoadingState';
 import { SegmentedTabs } from '../../components/ui/SegmentedTabs';
 import { StatusBadge } from '../../components/ui/StatusBadge';
-import { PressableScale, staggerDelay } from '../../components/ui/motion';
+import { listEnter, popIn, PressableScale } from '../../components/ui/motion';
 import { useCommunications } from '../../hooks/useCommunications';
 import { findContactByPhone, useContacts } from '../../hooks/useContacts';
 import { useAuthStore } from '../../store/authStore';
@@ -64,32 +64,40 @@ export default function CallsScreen() {
     const q = search.trim().toLowerCase();
     if (!q) return list;
     return list.filter((c) => {
-      const contact = c.contactId ? contactById.get(c.contactId) : undefined;
+      const contact =
+        (c.contactId ? contactById.get(c.contactId) : undefined) ??
+        findContactByPhone(contacts, c.phoneNumber);
       return (
         c.phoneNumber.toLowerCase().includes(q) ||
+        c.contactName?.toLowerCase().includes(q) ||
         contact?.name.toLowerCase().includes(q) ||
         contact?.company?.toLowerCase().includes(q)
       );
     });
-  }, [calls, tab, search, contactById]);
+  }, [calls, tab, search, contactById, contacts]);
 
   const filteredVoicemails = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return voicemails;
     return voicemails.filter((v) => {
-      const contact = v.contactId ? contactById.get(v.contactId) : undefined;
+      const contact =
+        (v.contactId ? contactById.get(v.contactId) : undefined) ??
+        findContactByPhone(contacts, v.phoneNumber);
       return (
         v.phoneNumber.toLowerCase().includes(q) ||
         contact?.name.toLowerCase().includes(q) ||
         contact?.company?.toLowerCase().includes(q)
       );
     });
-  }, [voicemails, search, contactById]);
+  }, [voicemails, search, contactById, contacts]);
+
+  /** Linked contact, else a contact with the same phone number. */
+  const contactForCall = (call: Call) =>
+    (call.contactId ? contactById.get(call.contactId) : undefined) ??
+    findContactByPhone(contacts, call.phoneNumber);
 
   const openCall = (call: Call) => {
-    const contact = call.contactId
-      ? contactById.get(call.contactId)
-      : findContactByPhone(contacts, call.phoneNumber);
+    const contact = contactForCall(call);
     if (contact) {
       router.push({ pathname: '/contact/[id]', params: { id: contact.id } });
     } else {
@@ -98,7 +106,9 @@ export default function CallsScreen() {
   };
 
   const isLoading = status === 'loading' || status === 'idle' || contactsLoading;
-  const hasError = status === 'error' || isError;
+  // Contacts only enrich names here; a contacts failure must not hide call history.
+  const hasError = status === 'error';
+  if (isError && __DEV__) console.warn('[calls] contacts failed to load');
 
   const header = (
     <ScreenHeader
@@ -136,16 +146,17 @@ export default function CallsScreen() {
       <Animated.FlatList
         data={filteredVoicemails}
         keyExtractor={(v) => v.id}
-        itemLayoutAnimation={LinearTransition.springify().damping(19)}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
         ListEmptyComponent={
           <EmptyState title="No voicemails" description="New voicemails will appear here with a transcript." />
         }
         renderItem={({ item, index }) => {
-          const contact = item.contactId ? contactById.get(item.contactId) : undefined;
+          const contact =
+            (item.contactId ? contactById.get(item.contactId) : undefined) ??
+            findContactByPhone(contacts, item.phoneNumber);
           return (
-            <Animated.View entering={FadeInDown.delay(staggerDelay(index)).springify().damping(19)}>
+            <Animated.View entering={listEnter(index)}>
               <VoicemailCard
                 voicemail={item}
                 contact={contact}
@@ -169,7 +180,6 @@ export default function CallsScreen() {
       <Animated.FlatList
         data={filteredCalls}
         keyExtractor={(c) => c.id}
-        itemLayoutAnimation={LinearTransition.springify().damping(19)}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
         ListEmptyComponent={
@@ -183,17 +193,14 @@ export default function CallsScreen() {
           />
         }
         renderItem={({ item, index }) => (
-          <Animated.View entering={FadeInDown.delay(staggerDelay(index)).springify().damping(19)}>
+          <Animated.View entering={listEnter(index)}>
             <CallListItem
               call={item}
-              contact={item.contactId ? contactById.get(item.contactId) : undefined}
+              contact={contactForCall(item)}
               onPress={() => openCall(item)}
               onAddUnknown={() => setAddNumber(item.phoneNumber)}
               onCallBack={() =>
-                startCall(
-                  item.phoneNumber,
-                  item.contactId ? contactById.get(item.contactId) : undefined,
-                )
+                startCall(item.phoneNumber, contactForCall(item))
               }
             />
           </Animated.View>
@@ -210,7 +217,7 @@ export default function CallsScreen() {
       <View style={styles.list}>{body}</View>
 
       {/* Floating Keypad button */}
-      <Animated.View entering={ZoomIn.delay(350).springify().damping(14)} style={styles.fabWrap}>
+      <Animated.View entering={popIn(175)} style={styles.fabWrap}>
         <PressableScale
           accessibilityRole="button"
           accessibilityLabel="Open keypad"

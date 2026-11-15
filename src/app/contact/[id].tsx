@@ -3,7 +3,8 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Mail, MessageCircle, MessageSquare, Phone, Star } from 'lucide-react-native';
 import React, { useState } from 'react';
 import { Alert, StyleSheet, View } from 'react-native';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+import Animated from 'react-native-reanimated';
+import { rise } from '../../components/ui/motion';
 import { ActivityListItem } from '../../components/contacts/ActivityListItem';
 import { ATSStatusCard } from '../../components/contacts/ATSStatusCard';
 import { ContactActionButton } from '../../components/contacts/ContactActionButton';
@@ -112,17 +113,17 @@ export default function ContactRecordScreen() {
           onPress={toggleFavourite}
           accessibilityLabel={isFavourite ? 'Remove from favourites' : 'Add to favourites'}
           size={44}
-          backgroundColor={colors.darkControl}
+          backgroundColor={colors.headerControl}
         />
       }
     >
       <View style={styles.identity}>
         <Avatar name={contact.name} size={56} backgroundColor="#FFFFFF" textColor={colors.textPrimary} />
         <View style={styles.identityTexts}>
-          <AppText variant="screenTitle" color={colors.headerText} style={styles.name}>
+          <AppText variant="screenTitle" color={colors.headerText} align="center" style={styles.name}>
             {contact.name}
           </AppText>
-          <AppText variant="supporting" color={colors.headerTextSecondary} numberOfLines={2}>
+          <AppText variant="supporting" color={colors.headerTextSecondary} align="center" numberOfLines={2}>
             {subtitleParts.join(' · ')}
           </AppText>
         </View>
@@ -159,7 +160,7 @@ export default function ContactRecordScreen() {
       scrollable
     >
       {contact.atsStatus ? (
-        <Animated.View entering={FadeInDown.delay(60).springify().damping(19)}>
+        <Animated.View entering={rise(30)}>
           <SectionHeader title="ATS status" />
           <ATSStatusCard
             status={contact.atsStatus}
@@ -169,7 +170,7 @@ export default function ContactRecordScreen() {
         </Animated.View>
       ) : null}
 
-      <Animated.View entering={FadeInDown.delay(150).springify().damping(19)}>
+      <Animated.View entering={rise(75)}>
       <SectionHeader title="Documents" />
       {docsLoading ? (
         <LoadingState label="Loading documents…" />
@@ -205,7 +206,7 @@ export default function ContactRecordScreen() {
       )}
       </Animated.View>
 
-      <Animated.View entering={FadeInDown.delay(240).springify().damping(19)}>
+      <Animated.View entering={rise(120)}>
       <SectionHeader title="Activity" />
       {activityLoading ? (
         <LoadingState label="Loading activity…" />
@@ -234,7 +235,7 @@ export default function ContactRecordScreen() {
       )}
       </Animated.View>
 
-      <Animated.View entering={FadeInDown.delay(320).springify().damping(19)}>
+      <Animated.View entering={rise(160)}>
         <View style={styles.deleteWrap}>
           <AppButton
             label="Delete contact"
@@ -259,13 +260,12 @@ export default function ContactRecordScreen() {
 
 const styles = StyleSheet.create({
   identity: {
-    flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.lg,
-    marginTop: spacing.xl,
+    gap: spacing.md,
+    marginTop: spacing.lg,
   },
   identityTexts: {
-    flex: 1,
+    alignItems: 'center',
     gap: 2,
   },
   name: {

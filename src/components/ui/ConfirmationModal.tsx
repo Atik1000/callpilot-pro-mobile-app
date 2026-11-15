@@ -1,6 +1,7 @@
 import React from 'react';
 import { Modal, StyleSheet, View } from 'react-native';
-import Animated, { ZoomIn } from 'react-native-reanimated';
+import Animated from 'react-native-reanimated';
+import { popIn } from './motion';
 import { colors, radius, spacing } from '../../theme';
 import { AppText } from './AppText';
 import { AppButton } from './AppButton';
@@ -31,7 +32,7 @@ export function ConfirmationModal({
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
       <View style={styles.backdrop}>
-        <Animated.View entering={ZoomIn.springify().damping(16)} style={styles.sheet}>
+        <Animated.View entering={popIn()} style={styles.sheet}>
           <AppText variant="cardTitle">{title}</AppText>
           <AppText variant="supporting" color={colors.textSecondary}>
             {message}

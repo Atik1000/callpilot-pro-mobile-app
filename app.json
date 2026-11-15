@@ -9,9 +9,17 @@
     "userInterfaceStyle": "light",
     "ios": {
       "icon": "./assets/images/icon.png",
-      "supportsTablet": false
+      "supportsTablet": false,
+      "bundleIdentifier": "pro.callpilot.app",
+      "infoPlist": {
+        "UIBackgroundModes": [
+          "audio",
+          "voip"
+        ]
+      }
     },
     "android": {
+      "package": "pro.callpilot.app",
       "adaptiveIcon": {
         "backgroundColor": "#FFFFFF",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -40,6 +48,14 @@
         {
           "cameraPermission": "CallPilot does not use the camera.",
           "microphonePermission": "CallPilot uses the microphone so you can make and receive calls."
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "extraProguardRules": "# react-native-webrtc: JNI-called classes must survive R8.\n-keep class org.webrtc.** { *; }\n-dontwarn org.webrtc.**"
+          }
         }
       ]
     ],

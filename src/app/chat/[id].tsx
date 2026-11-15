@@ -9,7 +9,7 @@ import {
   StyleSheet,
   View,
 } from 'react-native';
-import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
+import Animated, { FadeIn } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { DetailHeader } from '../../components/layout/DetailHeader';
 import { AttachmentCard } from '../../components/messages/AttachmentCard';
@@ -20,7 +20,7 @@ import { AppText } from '../../components/ui/AppText';
 import { ConfirmationModal } from '../../components/ui/ConfirmationModal';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { IconButton } from '../../components/ui/IconButton';
-import { PressableScale } from '../../components/ui/motion';
+import { listEnter, PressableScale } from '../../components/ui/motion';
 import { useCommunications } from '../../hooks/useCommunications';
 import { messageService } from '../../services/messageService';
 import { useContact } from '../../hooks/useContacts';
@@ -133,7 +133,7 @@ export default function ChatDetailsScreen() {
             onPress={() => startCall(contact.phone, contact)}
             accessibilityLabel={`Call ${contact.name}`}
             size={44}
-            backgroundColor={colors.darkControl}
+            backgroundColor={colors.headerControl}
           />
         ) : undefined
       }
@@ -163,7 +163,7 @@ export default function ChatDetailsScreen() {
           renderItem={({ item, index }) => {
             if (item.kind === 'separator') {
               return (
-                <Animated.View entering={FadeIn.delay(Math.min(index * 45, 360))} style={styles.separatorRow}>
+                <Animated.View entering={FadeIn.duration(200)} style={styles.separatorRow}>
                   <View style={styles.separatorPill}>
                     <AppText variant="caption" color={colors.textSecondary}>
                       {item.label}
@@ -183,7 +183,7 @@ export default function ChatDetailsScreen() {
             }
             return (
               <Animated.View
-                entering={FadeInDown.delay(Math.min(index * 45, 360)).springify().damping(17)}
+                entering={listEnter(index)}
               >
                 {content}
               </Animated.View>

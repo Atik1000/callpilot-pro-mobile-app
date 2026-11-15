@@ -1,7 +1,7 @@
 import { useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
-import Animated, { FadeInDown, LinearTransition } from 'react-native-reanimated';
+import Animated from 'react-native-reanimated';
 import { ScreenContainer } from '../../components/layout/ScreenContainer';
 import { ScreenHeader } from '../../components/layout/ScreenHeader';
 import { ConversationListItem } from '../../components/messages/ConversationListItem';
@@ -9,7 +9,7 @@ import { EmptyState } from '../../components/ui/EmptyState';
 import { ErrorState } from '../../components/ui/ErrorState';
 import { LoadingState } from '../../components/ui/LoadingState';
 import { SegmentedTabs } from '../../components/ui/SegmentedTabs';
-import { staggerDelay } from '../../components/ui/motion';
+import { listEnter } from '../../components/ui/motion';
 import { useContacts } from '../../hooks/useContacts';
 import { useAuthStore } from '../../store/authStore';
 import { useMessageStore } from '../../store/messageStore';
@@ -98,7 +98,6 @@ export default function MessagesScreen() {
         <Animated.FlatList
           data={filtered}
           keyExtractor={(c) => c.id}
-          itemLayoutAnimation={LinearTransition.springify().damping(19)}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
           ListEmptyComponent={
@@ -112,7 +111,7 @@ export default function MessagesScreen() {
             />
           }
           renderItem={({ item, index }) => (
-            <Animated.View entering={FadeInDown.delay(staggerDelay(index)).springify().damping(19)}>
+            <Animated.View entering={listEnter(index)}>
               <ConversationListItem
                 conversation={item}
                 contact={contactById.get(item.contactId)}

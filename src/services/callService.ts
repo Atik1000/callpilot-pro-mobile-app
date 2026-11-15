@@ -10,17 +10,27 @@ export interface CallHistory {
   contacts: Record<string, Contact>;
 }
 
+/** Accepts `{ <key>: [...] }`, DRF `{ results: [...] }` or a bare array. */
+function listFrom<T>(payload: unknown, key: string): T[] {
+  if (Array.isArray(payload)) return payload as T[];
+  if (payload && typeof payload === 'object') {
+    const data = payload as Record<string, unknown>;
+    for (const k of [key, 'results', 'data']) {
+      if (Array.isArray(data[k])) return data[k] as T[];
+    }
+  }
+  return [];
+}
+
 const liveCallService = {
   async getCalls(): Promise<CallHistory> {
     const [all, missed] = await Promise.all([
-      apiRequest<{ calls: ApiCall[] }>('/voice/api/calls/'),
-      apiRequest<{ calls: ApiCall[] }>('/voice/api/calls/?filter=missed').catch(() => ({
-        calls: [] as ApiCall[],
-      })),
+      apiRequest<unknown>('/voice/api/calls/'),
+      apiRequest<unknown>('/voice/api/calls/?filter=missed').catch(() => null),
     ]);
-    const missedIds = new Set((missed.calls ?? []).map((c) => c.uid));
+    const missedIds = new Set(listFrom<ApiCall>(missed, 'calls').map((c) => c.uid));
     const contacts: Record<string, Contact> = {};
-    const calls = (all.calls ?? []).map((apiCall) => {
+    const calls = listFrom<ApiCall>(all, 'calls').map((apiCall) => {
       if (apiCall.contact?.uid) {
         contacts[apiCall.contact.uid] = mapContact(apiCall.contact);
       }
@@ -31,8 +41,8 @@ const liveCallService = {
   },
 
   async getVoicemails(): Promise<Voicemail[]> {
-    const data = await apiRequest<{ voicemails: ApiVoicemail[] }>('/voice/api/voicemails/');
-    return (data.voicemails ?? [])
+    const data = await apiRequest<unknown>('/voice/api/voicemails/');
+    return listFrom<ApiVoicemail>(data, 'voicemails')
       .map(mapVoicemail)
       .sort((a, b) => b.timestamp.localeCompare(a.timestamp));
   },

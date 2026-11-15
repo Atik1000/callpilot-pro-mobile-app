@@ -2,6 +2,8 @@ import React, { useEffect } from 'react';
 import { Pressable, PressableProps, StyleProp, ViewStyle } from 'react-native';
 import Animated, {
   Easing,
+  Keyframe,
+  LinearTransition,
   useAnimatedStyle,
   useSharedValue,
   withRepeat,
@@ -12,12 +14,54 @@ import Animated, {
 
 export const AnimatedPressableBase = Animated.createAnimatedComponent(Pressable);
 
-/** Shared spring configs so every interaction feels consistent. */
+/**
+ * Shared spring configs so every interaction feels consistent. All are
+ * (near-)critically damped: they settle smoothly without wobbling.
+ */
 export const springs = {
-  press: { damping: 16, stiffness: 420, mass: 0.6 },
-  gentle: { damping: 18, stiffness: 220 },
-  bouncy: { damping: 12, stiffness: 260 },
+  press: { damping: 22, stiffness: 420, mass: 0.6 },
+  gentle: { damping: 26, stiffness: 260 },
+  bouncy: { damping: 20, stiffness: 300 },
 } as const;
+
+/** One easing curve for every entrance: fast start, soft landing. */
+const easeOut = Easing.bezier(0.22, 1, 0.36, 1);
+
+/**
+ * Entrance: short fade + 10px rise. `delay` orders sections on a screen;
+ * keep it small (≤ 200ms) so screens feel instant.
+ */
+export function rise(delay = 0, duration = 260) {
+  return new Keyframe({
+    0: { opacity: 0, transform: [{ translateY: 10 }] },
+    100: { opacity: 1, transform: [{ translateY: 0 }], easing: easeOut },
+  })
+    .duration(duration)
+    .delay(delay);
+}
+
+/** Entrance for small elements (badges, FABs, dialogs): fade + slight scale. */
+export function popIn(delay = 0, duration = 240) {
+  return new Keyframe({
+    0: { opacity: 0, transform: [{ scale: 0.92 }] },
+    100: { opacity: 1, transform: [{ scale: 1 }], easing: easeOut },
+  })
+    .duration(duration)
+    .delay(delay);
+}
+
+/**
+ * Entrance for list rows. Only the first screenful staggers (30ms apart,
+ * capped); rows mounted later while scrolling appear without animation so
+ * fast scrolling never stutters.
+ */
+export function listEnter(index: number) {
+  if (index >= 10) return undefined;
+  return rise(Math.min(index * 30, 180), 240);
+}
+
+/** Smooth, non-bouncy re-layout when a list item is removed. */
+export const listLayout = LinearTransition.duration(220).easing(easeOut);
 
 interface PressableScaleProps extends Omit<PressableProps, 'style'> {
   /** How far the element shrinks while pressed. */

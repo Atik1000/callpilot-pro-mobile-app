@@ -1,20 +1,26 @@
 export const colors = {
-  primary: '#000000',
+  /** Brand blue: buttons, active tabs, avatars, bubbles, call screens. */
+  primary: '#2563EB',
+  /** Deeper brand blue for full-screen backgrounds (auth, call screens). */
+  primaryDark: '#1D4ED8',
   secondary: '#2563EB',
 
   background: '#F5F6F8',
   surface: '#FFFFFF',
 
-  textPrimary: '#000000',
+  /** Body text stays near-black (navy) for legibility. */
+  textPrimary: '#0F172A',
   textSecondary: '#666666',
   textMuted: '#999999',
 
   border: '#E5E7EB',
   divider: '#EEEEEE',
 
-  headerBackground: '#000000',
+  headerBackground: '#1D4ED8',
   headerText: '#FFFFFF',
-  headerTextSecondary: '#D4D4D8',
+  headerTextSecondary: '#DBEAFE',
+  /** Icon-button fill on the blue header. */
+  headerControl: 'rgba(255,255,255,0.18)',
 
   blueLight: '#EFF6FF',
 
@@ -24,11 +30,11 @@ export const colors = {
 
   disabled: '#BDBDBD',
 
-  // Dark-surface helpers (active call screen, dark controls)
-  darkControl: '#1F1F23',
-  darkControlActive: '#3F3F46',
-  inputDark: '#1A1A1F',
-  borderDark: '#44444C',
+  // On-blue helpers (auth + call screens sit on the brand blue)
+  darkControl: 'rgba(255,255,255,0.16)',
+  darkControlActive: 'rgba(255,255,255,0.34)',
+  inputDark: 'rgba(255,255,255,0.12)',
+  borderDark: 'rgba(255,255,255,0.32)',
 } as const;
 
 export type AppColor = keyof typeof colors;

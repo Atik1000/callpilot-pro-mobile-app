@@ -12,6 +12,7 @@ import {
 } from 'lucide-react-native';
 import React, { useEffect, useState } from 'react';
 import {
+  Alert,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -23,13 +24,11 @@ import {
 import Animated, {
   Easing,
   FadeIn,
-  FadeInDown,
   useAnimatedStyle,
   useSharedValue,
   withRepeat,
   withSequence,
   withTiming,
-  ZoomIn,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CallControlButton } from '../components/calls/CallControlButton';
@@ -37,9 +36,10 @@ import { DialPad } from '../components/calls/DialPad';
 import { AppButton } from '../components/ui/AppButton';
 import { AppText } from '../components/ui/AppText';
 import { Avatar } from '../components/ui/Avatar';
-import { PressableScale, PulsingDot } from '../components/ui/motion';
+import { popIn, PressableScale, PulsingDot, rise } from '../components/ui/motion';
 import { useContact, useContacts } from '../hooks/useContacts';
 import { callService } from '../services/callService';
+import { isExpoGo } from '../services/voipService';
 import { useCallStore } from '../store/callStore';
 import { colors, fontFamily, radius, spacing } from '../theme';
 import { formatCallTimer } from '../utils/formatTime';
@@ -146,7 +146,7 @@ export default function ActiveCallScreen() {
 
       {/* Caller */}
       <View style={styles.caller}>
-        <Animated.View entering={ZoomIn.delay(80).springify().damping(13)}>
+        <Animated.View entering={popIn(40)}>
           <Animated.View style={[styles.avatarRing, ringStyle]}>
             <Avatar
               name={activeCall.displayName}
@@ -156,7 +156,7 @@ export default function ActiveCallScreen() {
             />
           </Animated.View>
         </Animated.View>
-        <Animated.View entering={FadeInDown.delay(180).springify().damping(18)} style={styles.callerTexts}>
+        <Animated.View entering={rise(90)} style={styles.callerTexts}>
           <AppText style={styles.callerName} color={colors.headerText}>
             {transferredTo ? `Transferring to ${transferredTo}…` : activeCall.displayName}
           </AppText>
@@ -169,7 +169,7 @@ export default function ActiveCallScreen() {
       {/* ATS card */}
       {contact?.atsId ? (
         <Animated.View
-          entering={FadeInDown.delay(260).springify().damping(18)}
+          entering={rise(130)}
           style={styles.atsCard}
         >
           <View style={styles.atsIcon}>
@@ -202,7 +202,7 @@ export default function ActiveCallScreen() {
       {/* Controls */}
       <View style={styles.controls}>
         <Animated.View
-          entering={FadeInDown.delay(340).springify().damping(18)}
+          entering={rise(170)}
           style={styles.controlRow}
         >
           <CallControlButton
@@ -226,11 +226,19 @@ export default function ActiveCallScreen() {
             icon={<Volume2 size={22} color="#FFFFFF" />}
             label="Speaker"
             active={isSpeakerOn}
-            onPress={toggleSpeaker}
+            onPress={
+              isExpoGo && isLiveCall
+                ? () =>
+                    Alert.alert(
+                      'Speaker',
+                      'Switching to loudspeaker needs the installed CallPilot app. In Expo Go, iOS picks the audio output — use the volume buttons, or Control Center to choose a device.',
+                    )
+                : toggleSpeaker
+            }
           />
         </Animated.View>
         <Animated.View
-          entering={FadeInDown.delay(420).springify().damping(18)}
+          entering={rise(210)}
           style={styles.controlRow}
         >
           <CallControlButton
@@ -254,7 +262,7 @@ export default function ActiveCallScreen() {
 
       {/* End call */}
       <View style={[styles.endRow, { paddingBottom: insets.bottom + spacing.xxl }]}>
-        <Animated.View entering={ZoomIn.delay(500).springify().damping(13)}>
+        <Animated.View entering={popIn(250)}>
           <PressableScale
             accessibilityRole="button"
             accessibilityLabel="End call"
@@ -382,7 +390,7 @@ export default function ActiveCallScreen() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: colors.primary,
+    backgroundColor: colors.primaryDark,
   },
   statusRow: {
     flexDirection: 'row',
