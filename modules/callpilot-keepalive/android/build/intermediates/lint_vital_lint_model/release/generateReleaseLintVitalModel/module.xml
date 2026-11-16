@@ -1,0 +1,19 @@
+<lint-module
+    format="1"
+    dir="/Users/atik/Desktop/callpilot/modules/callpilot-keepalive/android"
+    name=":callpilot-keepalive"
+    type="LIBRARY"
+    maven="pro.callpilot:callpilot-keepalive:1.0.0"
+    agpVersion="9.2.1"
+    buildFolder="build"
+    bootClassPath="/Users/atik/Library/Android/sdk/platforms/android-37.0/android.jar:/Users/atik/Library/Android/sdk/build-tools/36.0.0/core-lambda-stubs.jar"
+    javaSourceLevel="17"
+    compileTarget="android-37.0"
+    neverShrinking="true"
+    highlightGradualR8Api="false">
+  <lintOptions
+      absolutePaths="true"
+      checkReleaseBuilds="true"
+      explainIssues="true"/>
+  <variant name="release"/>
+</lint-module>

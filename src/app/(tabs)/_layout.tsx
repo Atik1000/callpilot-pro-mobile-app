@@ -24,6 +24,7 @@ export default function TabsLayout() {
       <Tabs.Screen name="messages" options={{ title: 'Messages' }} />
       <Tabs.Screen name="contacts" options={{ title: 'Contacts' }} />
       <Tabs.Screen name="alerts" options={{ title: 'Alerts' }} />
+      {/* Not shown in the custom bar; opened from the header avatar / status chip. */}
       <Tabs.Screen name="settings" options={{ title: 'Settings' }} />
     </Tabs>
   );

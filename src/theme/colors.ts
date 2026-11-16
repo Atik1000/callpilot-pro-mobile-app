@@ -1,40 +1,71 @@
+/**
+ * CallPilot mobile UI kit colours. Text is always black or white; colour
+ * means the same thing everywhere:
+ * - AI Blue: main actions, links, active tab, positive progress
+ * - Mint: done/received, Call and Answer, Connected
+ * - Amber: waiting / needs action
+ * - Red: missed, unsuccessful, missing, End call, errors
+ */
 export const colors = {
-  /** Brand blue: buttons, active tabs, avatars, bubbles, call screens. */
-  primary: '#2563EB',
-  /** Deeper brand blue for full-screen backgrounds (auth, call screens). */
-  primaryDark: '#1D4ED8',
-  secondary: '#2563EB',
+  black: '#000000',
+  white: '#FFFFFF',
 
-  background: '#F5F6F8',
+  aiBlue: '#1A66E5',
+  aiBlueText: '#0B4FB3',
+  aiBlueTint: '#E8F0FD',
+  mint: '#14C38E',
+  mintText: '#12795A',
+  mintTint: '#E3F6EE',
+  amber: '#E59A12',
+  amberText: '#8A5A00',
+  amberTint: '#FDF1DC',
+  red: '#D23A3A',
+  redText: '#B42323',
+  redTint: '#FBE5E5',
+  lightGrey: '#F5F6F8',
+  line: '#E6E8EC',
+  callDark: '#1A1D23',
+
+  /* ---- semantic aliases used across the app ---- */
+  /** Main action colour (buttons, links, active tab). */
+  primary: '#1A66E5',
+  /** Full-screen dark surface (call screens, black splash). */
+  primaryDark: '#000000',
+  secondary: '#1A66E5',
+  primaryTint: '#E8F0FD',
+
+  background: '#FFFFFF',
   surface: '#FFFFFF',
 
-  /** Body text stays near-black (navy) for legibility. */
-  textPrimary: '#0F172A',
-  textSecondary: '#666666',
-  textMuted: '#999999',
+  textPrimary: '#000000',
+  /** The kit keeps text black; secondary lines differ by size/weight. */
+  textSecondary: '#000000',
+  /** Placeholders and disabled hints only. */
+  textMuted: '#6B7280',
 
-  border: '#E5E7EB',
-  divider: '#EEEEEE',
+  border: '#E6E8EC',
+  divider: '#E6E8EC',
+  cardBorder: '#E6E8EC',
+  segmentTrack: '#F5F6F8',
 
-  headerBackground: '#1D4ED8',
-  headerText: '#FFFFFF',
-  headerTextSecondary: '#DBEAFE',
-  /** Icon-button fill on the blue header. */
-  headerControl: 'rgba(255,255,255,0.18)',
+  headerBackground: '#FFFFFF',
+  headerText: '#000000',
+  headerTextSecondary: '#000000',
+  headerControl: '#F5F6F8',
 
-  blueLight: '#EFF6FF',
+  blueLight: '#E8F0FD',
 
-  success: '#16A34A',
-  warning: '#F59E0B',
-  error: '#EF4444',
+  success: '#14C38E',
+  warning: '#E59A12',
+  error: '#D23A3A',
 
-  disabled: '#BDBDBD',
+  disabled: '#C9CDD4',
 
-  // On-blue helpers (auth + call screens sit on the brand blue)
-  darkControl: 'rgba(255,255,255,0.16)',
-  darkControlActive: 'rgba(255,255,255,0.34)',
-  inputDark: 'rgba(255,255,255,0.12)',
-  borderDark: 'rgba(255,255,255,0.32)',
+  // Call screens (black)
+  darkControl: '#1A1D23',
+  darkControlActive: '#FFFFFF',
+  inputDark: '#F5F6F8',
+  borderDark: '#E6E8EC',
 } as const;
 
 export type AppColor = keyof typeof colors;

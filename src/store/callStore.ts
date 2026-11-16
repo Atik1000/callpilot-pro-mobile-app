@@ -1,4 +1,5 @@
-import { Alert } from 'react-native';
+import { Alert, AppState } from 'react-native';
+import { keepAlive } from '../../modules/callpilot-keepalive/src';
 import { create } from 'zustand';
 import {
   ActiveCall,
@@ -105,6 +106,28 @@ function buildActiveCall(
   };
 }
 
+/**
+ * Phones like Vivo/Xiaomi kill background apps despite the foreground
+ * service unless CallPilot is exempt from battery optimisation. Ask once
+ * per launch, only when needed.
+ */
+let batteryPromptShown = false;
+function askBatteryExemptionOnce() {
+  if (batteryPromptShown || !keepAlive.available) return;
+  if (keepAlive.isIgnoringBatteryOptimizations()) return;
+  batteryPromptShown = true;
+  setTimeout(() => {
+    Alert.alert(
+      'Keep calls coming in',
+      'Allow CallPilot to run in the background so calls still ring when the app is minimised.',
+      [
+        { text: 'Not now', style: 'cancel' },
+        { text: 'Allow', onPress: () => keepAlive.requestIgnoreBatteryOptimizations() },
+      ],
+    );
+  }, 1500);
+}
+
 export const useCallStore = create<CallState>((set, get) => {
   /** Appends the finished call to local history and clears call state. */
   const finalizeCall = (direction: Call['direction'] = 'outgoing') => {
@@ -146,12 +169,12 @@ export const useCallStore = create<CallState>((set, get) => {
       const known = Object.values(get().callContacts).find(
         (c) => c.phone && info.phoneNumber.replace(/\D/g, '').endsWith(c.phone.replace(/\D/g, '').slice(-9)),
       );
-      set({
-        incomingCall: {
-          phoneNumber: info.phoneNumber,
-          displayName: known?.name || info.callerName || formatPhone(info.phoneNumber),
-        },
-      });
+      const displayName = known?.name || info.callerName || formatPhone(info.phoneNumber);
+      set({ incomingCall: { phoneNumber: info.phoneNumber, displayName } });
+      // Ringing in the background: surface it (full-screen / heads-up alert).
+      if (AppState.currentState !== 'active') {
+        keepAlive.showIncomingCall(displayName, 'Incoming call · Business line');
+      }
     },
 
     onCallFailed: (message: string) => {
@@ -159,6 +182,7 @@ export const useCallStore = create<CallState>((set, get) => {
     },
 
     onCallPhase: (phase: VoipCallPhase) => {
+      if (phase !== 'ringing') keepAlive.clearIncomingCall();
       if (phase === 'ended') {
         const { activeCall, incomingCall } = get();
         if (incomingCall) {
@@ -238,9 +262,13 @@ export const useCallStore = create<CallState>((set, get) => {
     initVoip: () => {
       voipService.setListener(voipListener);
       void voipService.connect();
+      // Keep the line alive while the app is minimised (Android).
+      keepAlive.start('CallPilot', 'Ready for calls on your business line');
+      askBatteryExemptionOnce();
     },
 
     shutdownVoip: () => {
+      keepAlive.stop();
       void voipService.disconnect();
       voipService.setListener(null);
       set({
@@ -293,6 +321,7 @@ export const useCallStore = create<CallState>((set, get) => {
     answerIncoming: async () => {
       const incoming = get().incomingCall;
       if (!incoming) return;
+      keepAlive.clearIncomingCall();
       const contact = Object.values(get().callContacts).find(
         (c) => c.name === incoming.displayName,
       );
@@ -315,6 +344,7 @@ export const useCallStore = create<CallState>((set, get) => {
     },
 
     declineIncoming: () => {
+      keepAlive.clearIncomingCall();
       voipService.decline();
       set({ incomingCall: null });
     },

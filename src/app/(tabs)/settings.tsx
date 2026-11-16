@@ -9,6 +9,7 @@ import { ScreenHeader } from '../../components/layout/ScreenHeader';
 import { OptionPicker } from '../../components/settings/OptionPicker';
 import { AppButton } from '../../components/ui/AppButton';
 import { AppText } from '../../components/ui/AppText';
+import { Avatar } from '../../components/ui/Avatar';
 import { Card } from '../../components/ui/Card';
 import { ConfirmationModal } from '../../components/ui/ConfirmationModal';
 import { Divider } from '../../components/ui/Divider';
@@ -18,7 +19,8 @@ import { ToggleRow } from '../../components/ui/ToggleRow';
 import { authService } from '../../services/authService';
 import { useAuthStore } from '../../store/authStore';
 import { useSettingsStore } from '../../store/settingsStore';
-import { colors, spacing } from '../../theme';
+import { colors, fontFamily, spacing } from '../../theme';
+import { formatPhone } from '../../utils/formatPhone';
 import { OutOfHoursDestination } from '../../types';
 
 const STATUS_TABS = [
@@ -54,15 +56,28 @@ export default function SettingsScreen() {
     setSignOutDevicesOpen(false);
   };
 
-  const header = (
-    <ScreenHeader
-      title="Settings"
-      subtitle={`${user?.name ?? ''} · ${user?.businessNumber ?? ''}`}
-    />
-  );
+  const header = <ScreenHeader title="Settings" showStatus={false} showBack />;
+  const available = settings.availability === 'available';
 
   return (
     <ScreenContainer header={header} scrollable>
+      <View style={styles.profile}>
+        <Avatar name={user?.name || 'Me'} size={52} backgroundColor={colors.white} textColor={colors.black} />
+        <View style={styles.profileTexts}>
+          <AppText variant="cardTitle" color={colors.white} numberOfLines={1}>
+            {user?.name || 'Your account'}
+          </AppText>
+          <AppText variant="supporting" color={colors.white} numberOfLines={1}>
+            {user?.businessNumber ? formatPhone(user.businessNumber) : user?.email ?? ''}
+          </AppText>
+        </View>
+        <View style={[styles.profilePill, { backgroundColor: available ? colors.mint : colors.amber }]}>
+          <AppText style={styles.profilePillText} color={colors.white}>
+            {available ? 'Available' : 'Busy'}
+          </AppText>
+        </View>
+      </View>
+
       <Animated.View entering={rise(20)}>
       <SectionHeader title="My status" />
       <SegmentedTabs
@@ -147,7 +162,7 @@ export default function SettingsScreen() {
       <AppButton
         label="Sign out"
         onPress={() => setSignOutOpen(true)}
-        variant="light"
+        variant="danger"
         fullWidth
         style={styles.signOut}
       />
@@ -201,6 +216,29 @@ export default function SettingsScreen() {
 }
 
 const styles = StyleSheet.create({
+  profile: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: colors.black,
+    borderRadius: 18,
+    padding: 16,
+    marginTop: spacing.xs,
+  },
+  profileTexts: {
+    flex: 1,
+    minWidth: 0,
+    gap: 2,
+  },
+  profilePill: {
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+  },
+  profilePillText: {
+    fontFamily: fontFamily.extrabold,
+    fontSize: 12,
+  },
   hoursRow: {
     flexDirection: 'row',
     alignItems: 'center',

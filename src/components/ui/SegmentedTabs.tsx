@@ -1,9 +1,8 @@
 import React, { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
-import Animated, { useAnimatedStyle, withSpring } from 'react-native-reanimated';
-import { colors, radius, spacing } from '../../theme';
+import Animated, { Easing, useAnimatedStyle, withTiming } from 'react-native-reanimated';
+import { colors, fontFamily, spacing } from '../../theme';
 import { AppText } from './AppText';
-import { springs } from './motion';
 
 export interface SegmentedTab<T extends string> {
   key: T;
@@ -19,7 +18,7 @@ interface SegmentedTabsProps<T extends string> {
 const PAD = spacing.xs;
 
 /**
- * White rounded container with a black pill that springs between tabs
+ * Grey track with a white pill that slides between tabs
  * (Calls, Contacts, Messages filters and Settings status).
  */
 export function SegmentedTabs<T extends string>({
@@ -37,7 +36,14 @@ export function SegmentedTabs<T extends string>({
   const pillStyle = useAnimatedStyle(
     () => ({
       width: tabWidth,
-      transform: [{ translateX: withSpring(selectedIndex * tabWidth, springs.gentle) }],
+      transform: [
+        {
+          translateX: withTiming(selectedIndex * tabWidth, {
+            duration: 200,
+            easing: Easing.out(Easing.cubic),
+          }),
+        },
+      ],
     }),
     [selectedIndex, tabWidth],
   );
@@ -59,8 +65,8 @@ export function SegmentedTabs<T extends string>({
             style={styles.tab}
           >
             <AppText
-              variant="bodyMedium"
-              color={active ? '#FFFFFF' : colors.textPrimary}
+              style={active ? styles.labelActive : styles.label}
+              color={colors.black}
               numberOfLines={1}
             >
               {tab.label}
@@ -75,8 +81,8 @@ export function SegmentedTabs<T extends string>({
 const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
+    backgroundColor: colors.lightGrey,
+    borderRadius: 13,
     padding: PAD,
   },
   pill: {
@@ -84,14 +90,29 @@ const styles = StyleSheet.create({
     top: PAD,
     bottom: PAD,
     left: PAD,
-    borderRadius: radius.lg - PAD,
-    backgroundColor: colors.primary,
+    borderRadius: 10,
+    backgroundColor: colors.white,
+    shadowColor: '#000000',
+    shadowOpacity: 0.12,
+    shadowRadius: 3,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 1,
   },
   tab: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: spacing.md,
+    height: 40,
     paddingHorizontal: spacing.sm,
+  },
+  label: {
+    fontFamily: fontFamily.semibold,
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  labelActive: {
+    fontFamily: fontFamily.extrabold,
+    fontSize: 13,
+    lineHeight: 18,
   },
 });

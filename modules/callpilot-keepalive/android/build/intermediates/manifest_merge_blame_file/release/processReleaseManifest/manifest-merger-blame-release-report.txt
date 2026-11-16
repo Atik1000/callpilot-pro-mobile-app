@@ -1,0 +1,49 @@
+1<?xml version="1.0" encoding="utf-8"?>
+2<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+3    package="expo.modules.callpilotkeepalive" >
+4
+5    <uses-sdk android:minSdkVersion="24" />
+5-->INJECTED
+5-->INJECTED
+6
+7    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+7-->/Users/atik/Desktop/callpilot/modules/callpilot-keepalive/android/src/main/AndroidManifest.xml:2:3-75
+7-->/Users/atik/Desktop/callpilot/modules/callpilot-keepalive/android/src/main/AndroidManifest.xml:2:20-72
+8    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+8-->/Users/atik/Desktop/callpilot/modules/callpilot-keepalive/android/src/main/AndroidManifest.xml:3:3-87
+8-->/Users/atik/Desktop/callpilot/modules/callpilot-keepalive/android/src/main/AndroidManifest.xml:3:20-84
+9    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+9-->/Users/atik/Desktop/callpilot/modules/callpilot-keepalive/android/src/main/AndroidManifest.xml:4:3-75
+9-->/Users/atik/Desktop/callpilot/modules/callpilot-keepalive/android/src/main/AndroidManifest.xml:4:20-72
+10    <uses-permission android:name="android.permission.WAKE_LOCK" />
+10-->/Users/atik/Desktop/callpilot/modules/callpilot-keepalive/android/src/main/AndroidManifest.xml:5:3-66
+10-->/Users/atik/Desktop/callpilot/modules/callpilot-keepalive/android/src/main/AndroidManifest.xml:5:20-63
+11    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+11-->/Users/atik/Desktop/callpilot/modules/callpilot-keepalive/android/src/main/AndroidManifest.xml:6:3-79
+11-->/Users/atik/Desktop/callpilot/modules/callpilot-keepalive/android/src/main/AndroidManifest.xml:6:20-76
+12    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+12-->/Users/atik/Desktop/callpilot/modules/callpilot-keepalive/android/src/main/AndroidManifest.xml:7:3-93
+12-->/Users/atik/Desktop/callpilot/modules/callpilot-keepalive/android/src/main/AndroidManifest.xml:7:20-90
+13
+14    <application>
+14-->/Users/atik/Desktop/callpilot/modules/callpilot-keepalive/android/src/main/AndroidManifest.xml:9:3-19:17
+15        <service
+15-->/Users/atik/Desktop/callpilot/modules/callpilot-keepalive/android/src/main/AndroidManifest.xml:10:5-18:15
+16            android:name="expo.modules.callpilotkeepalive.KeepAliveService"
+16-->/Users/atik/Desktop/callpilot/modules/callpilot-keepalive/android/src/main/AndroidManifest.xml:11:7-70
+17            android:exported="false"
+17-->/Users/atik/Desktop/callpilot/modules/callpilot-keepalive/android/src/main/AndroidManifest.xml:12:7-31
+18            android:foregroundServiceType="specialUse"
+18-->/Users/atik/Desktop/callpilot/modules/callpilot-keepalive/android/src/main/AndroidManifest.xml:14:7-49
+19            android:stopWithTask="false" >
+19-->/Users/atik/Desktop/callpilot/modules/callpilot-keepalive/android/src/main/AndroidManifest.xml:13:7-35
+20            <property
+20-->/Users/atik/Desktop/callpilot/modules/callpilot-keepalive/android/src/main/AndroidManifest.xml:15:7-17:126
+21                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+21-->/Users/atik/Desktop/callpilot/modules/callpilot-keepalive/android/src/main/AndroidManifest.xml:16:9-68
+22                android:value="Keeps the VoIP business line registered so incoming calls ring while the app is in the background." />
+22-->/Users/atik/Desktop/callpilot/modules/callpilot-keepalive/android/src/main/AndroidManifest.xml:17:9-123
+23        </service>
+24    </application>
+25
+26</manifest>

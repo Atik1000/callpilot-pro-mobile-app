@@ -1,7 +1,7 @@
 import { Search, X } from 'lucide-react-native';
 import React from 'react';
 import { Pressable, StyleSheet, TextInput, View } from 'react-native';
-import { colors, fontFamily, radius, spacing } from '../../theme';
+import { colors, fontFamily, spacing } from '../../theme';
 
 interface SearchBarProps {
   value: string;
@@ -42,16 +42,16 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.surface,
-    borderRadius: radius.md,
-    paddingHorizontal: spacing.lg,
-    minHeight: 48,
+    backgroundColor: colors.lightGrey,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    minHeight: 46,
     gap: spacing.sm,
   },
   input: {
     flex: 1,
-    fontFamily: fontFamily.regular,
-    fontSize: 15,
+    fontFamily: fontFamily.medium,
+    fontSize: 14,
     color: colors.textPrimary,
     paddingVertical: spacing.md,
   },

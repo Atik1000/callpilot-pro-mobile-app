@@ -15,9 +15,9 @@ interface AvatarProps {
 
 export function Avatar({
   name,
-  size = 48,
-  backgroundColor = colors.primary,
-  textColor = '#FFFFFF',
+  size = 44,
+  backgroundColor = colors.black,
+  textColor = colors.white,
   imageUri,
   onPress,
 }: AvatarProps) {
@@ -33,7 +33,7 @@ export function Avatar({
     <View style={[styles.circle, circle]}>
       <AppText
         color={textColor}
-        style={{ fontSize: size * 0.34, fontFamily: fontFamily.semibold }}
+        style={{ fontSize: Math.round(size * 0.32), fontFamily: fontFamily.extrabold }}
       >
         {getInitials(name)}
       </AppText>

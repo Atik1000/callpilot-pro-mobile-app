@@ -1,15 +1,13 @@
-import React, { useEffect } from 'react';
-import { Pressable, PressableProps, StyleProp, ViewStyle } from 'react-native';
+import React from 'react';
+import { Platform, Pressable, PressableProps, StyleProp, View, ViewStyle } from 'react-native';
 import Animated, {
   Easing,
   Keyframe,
   LinearTransition,
+  ReduceMotion,
   useAnimatedStyle,
   useSharedValue,
-  withRepeat,
-  withSequence,
   withSpring,
-  withTiming,
 } from 'react-native-reanimated';
 
 export const AnimatedPressableBase = Animated.createAnimatedComponent(Pressable);
@@ -28,40 +26,37 @@ export const springs = {
 const easeOut = Easing.bezier(0.22, 1, 0.36, 1);
 
 /**
- * Entrance: short fade + 10px rise. `delay` orders sections on a screen;
- * keep it small (≤ 200ms) so screens feel instant.
+ * Entrance: a quick, quiet fade. No movement and no staggered delays, so
+ * screens appear calm and immediately usable. `_delay` is accepted for
+ * existing call sites but ignored on purpose. Honors the OS reduce-motion
+ * setting.
  */
-export function rise(delay = 0, duration = 260) {
+export function rise(_delay = 0, duration = 160) {
+  // On web, Reanimated keyframe entrances can leave elements absolutely
+  // positioned (overlapping layout), so web renders without them.
+  if (Platform.OS === 'web') return undefined;
   return new Keyframe({
-    0: { opacity: 0, transform: [{ translateY: 10 }] },
-    100: { opacity: 1, transform: [{ translateY: 0 }], easing: easeOut },
+    0: { opacity: 0 },
+    100: { opacity: 1, easing: easeOut },
   })
     .duration(duration)
-    .delay(delay);
+    .reduceMotion(ReduceMotion.System);
 }
 
-/** Entrance for small elements (badges, FABs, dialogs): fade + slight scale. */
-export function popIn(delay = 0, duration = 240) {
-  return new Keyframe({
-    0: { opacity: 0, transform: [{ scale: 0.92 }] },
-    100: { opacity: 1, transform: [{ scale: 1 }], easing: easeOut },
-  })
-    .duration(duration)
-    .delay(delay);
+/** Entrance for small elements (dialogs, FABs): the same quiet fade. */
+export function popIn(_delay = 0, duration = 160) {
+  return rise(0, duration);
 }
 
-/**
- * Entrance for list rows. Only the first screenful staggers (30ms apart,
- * capped); rows mounted later while scrolling appear without animation so
- * fast scrolling never stutters.
- */
-export function listEnter(index: number) {
-  if (index >= 10) return undefined;
-  return rise(Math.min(index * 30, 180), 240);
+/** List rows appear immediately — no per-row entrance animation. */
+export function listEnter(_index: number) {
+  return undefined;
 }
 
 /** Smooth, non-bouncy re-layout when a list item is removed. */
-export const listLayout = LinearTransition.duration(220).easing(easeOut);
+export const listLayout = LinearTransition.duration(200)
+  .easing(easeOut)
+  .reduceMotion(ReduceMotion.System);
 
 interface PressableScaleProps extends Omit<PressableProps, 'style'> {
   /** How far the element shrinks while pressed. */
@@ -75,7 +70,7 @@ interface PressableScaleProps extends Omit<PressableProps, 'style'> {
  * opacity-only pressed states.
  */
 export function PressableScale({
-  scaleTo = 0.95,
+  scaleTo = 0.97,
   style,
   onPressIn,
   onPressOut,
@@ -119,30 +114,15 @@ interface PulsingDotProps {
   style?: StyleProp<ViewStyle>;
 }
 
-/** Softly pulsing dot for live states: Recording, Available, unread. */
-export function PulsingDot({ color, size = 8, duration = 1600, style }: PulsingDotProps) {
-  const pulse = useSharedValue(0);
-
-  useEffect(() => {
-    pulse.value = withRepeat(
-      withSequence(
-        withTiming(1, { duration: duration / 2, easing: Easing.inOut(Easing.ease) }),
-        withTiming(0, { duration: duration / 2, easing: Easing.inOut(Easing.ease) }),
-      ),
-      -1,
-    );
-  }, [duration, pulse]);
-
-  const animatedStyle = useAnimatedStyle(() => ({
-    opacity: 0.55 + pulse.value * 0.45,
-    transform: [{ scale: 0.9 + pulse.value * 0.25 }],
-  }));
-
+/**
+ * Status dot for live states (Recording, Available, unread). Kept static:
+ * colour alone carries the state, without constant motion.
+ */
+export function PulsingDot({ color, size = 8, style }: PulsingDotProps) {
   return (
-    <Animated.View
+    <View
       style={[
         { width: size, height: size, borderRadius: size / 2, backgroundColor: color },
-        animatedStyle,
         style,
       ]}
     />

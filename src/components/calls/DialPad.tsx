@@ -1,7 +1,5 @@
 import React from 'react';
 import { StyleSheet, View, useWindowDimensions } from 'react-native';
-import Animated from 'react-native-reanimated';
-import { rise } from '../ui/motion';
 import { spacing } from '../../theme';
 import { DialPadKey } from './DialPadKey';
 
@@ -34,11 +32,7 @@ export function DialPad({ onDigit, onLongZero }: DialPadProps) {
   return (
     <View style={styles.pad}>
       {KEYS.map((row, i) => (
-        <Animated.View
-          key={i}
-          entering={rise(20 + i * 18, 220)}
-          style={styles.row}
-        >
+        <View key={i} style={styles.row}>
           {row.map(({ digit, letters }) => (
             <DialPadKey
               key={digit}
@@ -49,7 +43,7 @@ export function DialPad({ onDigit, onLongZero }: DialPadProps) {
               onLongPress={digit === '0' && onLongZero ? () => onLongZero() : undefined}
             />
           ))}
-        </Animated.View>
+        </View>
       ))}
     </View>
   );

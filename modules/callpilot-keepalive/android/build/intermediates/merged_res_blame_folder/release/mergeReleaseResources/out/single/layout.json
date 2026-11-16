@@ -1,0 +1,22 @@
+[
+    {
+        "merged": "expo.modules.callpilotkeepalive.callpilot-keepalive-release-9:/layout/notification_template_part_chronometer.xml",
+        "source": "expo.modules.callpilotkeepalive.callpilot-keepalive-core-1.13.1-1:/layout/notification_template_part_chronometer.xml"
+    },
+    {
+        "merged": "expo.modules.callpilotkeepalive.callpilot-keepalive-release-9:/layout/custom_dialog.xml",
+        "source": "expo.modules.callpilotkeepalive.callpilot-keepalive-core-1.13.1-1:/layout/custom_dialog.xml"
+    },
+    {
+        "merged": "expo.modules.callpilotkeepalive.callpilot-keepalive-release-9:/layout/ime_secondary_split_test_activity.xml",
+        "source": "expo.modules.callpilotkeepalive.callpilot-keepalive-core-1.13.1-1:/layout/ime_secondary_split_test_activity.xml"
+    },
+    {
+        "merged": "expo.modules.callpilotkeepalive.callpilot-keepalive-release-9:/layout/ime_base_split_test_activity.xml",
+        "source": "expo.modules.callpilotkeepalive.callpilot-keepalive-core-1.13.1-1:/layout/ime_base_split_test_activity.xml"
+    },
+    {
+        "merged": "expo.modules.callpilotkeepalive.callpilot-keepalive-release-9:/layout/notification_template_part_time.xml",
+        "source": "expo.modules.callpilotkeepalive.callpilot-keepalive-core-1.13.1-1:/layout/notification_template_part_time.xml"
+    }
+]

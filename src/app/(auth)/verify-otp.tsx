@@ -22,7 +22,7 @@ import { AppText } from '../../components/ui/AppText';
 import { MOCK_OTP } from '../../data/constants';
 import { SERVICE_MODE } from '../../services/config';
 import { useAuthStore } from '../../store/authStore';
-import { colors, fontFamily, radius, spacing } from '../../theme';
+import { colors, fontFamily, spacing } from '../../theme';
 import { OTP_LENGTH, otpSchema } from '../../utils/validators';
 
 const RESEND_SECONDS = 30;
@@ -154,7 +154,7 @@ export default function VerifyOtpScreen() {
         <AppButton
           label="Verify"
           onPress={() => void handleVerify()}
-          variant="light"
+          variant="primary"
           fullWidth
           disabled={!canVerify}
           loading={isLoading}
@@ -198,7 +198,7 @@ export default function VerifyOtpScreen() {
 const styles = StyleSheet.create({
   flex: {
     flex: 1,
-    backgroundColor: colors.primaryDark,
+    backgroundColor: colors.white,
   },
   content: {
     flex: 1,
@@ -225,22 +225,22 @@ const styles = StyleSheet.create({
     flex: 1,
     aspectRatio: 0.82,
     maxWidth: 58,
-    borderRadius: radius.md,
+    borderRadius: 14,
     borderWidth: 1.5,
-    borderColor: 'rgba(255,255,255,0.35)',
-    backgroundColor: colors.inputDark,
+    borderColor: colors.line,
+    backgroundColor: colors.white,
     alignItems: 'center',
     justifyContent: 'center',
   },
   boxActive: {
-    borderColor: '#FFFFFF',
+    borderColor: colors.aiBlue,
     borderWidth: 2,
   },
   boxFilled: {
-    borderColor: 'rgba(255,255,255,0.75)',
+    borderColor: colors.black,
   },
   boxDigit: {
-    fontFamily: fontFamily.semibold,
+    fontFamily: fontFamily.extrabold,
     fontSize: 24,
   },
   hiddenInput: {

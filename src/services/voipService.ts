@@ -382,6 +382,7 @@ class NativeVoipService implements VoipEngine {
         }
         this.incomingCall = call;
         this.watchCall(call);
+        this.startRinging();
         this.listener?.onIncoming({
           phoneNumber: msg?.params?.caller_id_number || 'Unknown number',
           callerName: msg?.params?.caller_id_name || undefined,
@@ -504,6 +505,7 @@ class NativeVoipService implements VoipEngine {
   async answer(): Promise<void> {
     const call = this.incomingCall;
     if (!call) throw new Error('No incoming call to answer.');
+    this.stopRinging();
     await ensureMicrophonePermission();
     this.currentCall = call;
     this.incomingCall = null;
@@ -512,6 +514,7 @@ class NativeVoipService implements VoipEngine {
   }
 
   decline(): void {
+    this.stopRinging();
     const call = this.incomingCall;
     this.incomingCall = null;
     if (call) {
@@ -564,6 +567,26 @@ class NativeVoipService implements VoipEngine {
     } catch {}
   }
 
+  /** Phone's default ringtone + vibration while an incoming call rings. */
+  private ringing = false;
+  private startRinging(): void {
+    const icm = this.getInCallManager();
+    if (!icm || this.ringing) return;
+    try {
+      // Loops until stopped; 45s cap in case a stop is ever missed.
+      icm.startRingtone('_DEFAULT_', [0, 900, 700], 'playback', 45);
+      this.ringing = true;
+    } catch {}
+  }
+
+  private stopRinging(): void {
+    if (!this.ringing) return;
+    this.ringing = false;
+    try {
+      this.getInCallManager()?.stopRingtone();
+    } catch {}
+  }
+
   private startAudioSession(): void {
     const icm = this.getInCallManager();
     try {
@@ -572,6 +595,7 @@ class NativeVoipService implements VoipEngine {
   }
 
   private finishCall(): void {
+    this.stopRinging();
     this.currentCall = null;
     this.incomingCall = null;
     this.endReason = null;

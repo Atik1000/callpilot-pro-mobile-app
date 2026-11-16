@@ -156,15 +156,7 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   avatarRing: {
-    padding: 3,
-    borderRadius: 64,
-    borderWidth: 2,
-    borderColor: colors.secondary,
     marginBottom: spacing.md,
-    shadowColor: colors.secondary,
-    shadowOffset: { width: 0, height: 0 },
-    shadowRadius: 22,
-    elevation: 8,
   },
   callerName: {
     fontFamily: fontFamily.bold,
@@ -187,9 +179,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   decline: {
-    backgroundColor: '#E5484D',
+    backgroundColor: colors.red,
   },
   answer: {
-    backgroundColor: '#30A46C',
+    backgroundColor: colors.mint,
   },
 });

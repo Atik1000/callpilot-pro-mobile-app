@@ -5,7 +5,7 @@ import { AppText } from './AppText';
 
 interface BadgeProps {
   label: string;
-  /** dark = black pill with white text (channel badges), light = bordered */
+  /** dark = brand-tinted pill (channel badges), light = bordered */
   variant?: 'dark' | 'light';
 }
 
@@ -15,7 +15,7 @@ export function Badge({ label, variant = 'dark' }: BadgeProps) {
     <View style={[styles.base, variant === 'dark' ? styles.dark : styles.light]}>
       <AppText
         style={styles.text}
-        color={variant === 'dark' ? '#FFFFFF' : colors.textSecondary}
+        color={variant === 'dark' ? colors.primary : colors.textSecondary}
       >
         {label}
       </AppText>
@@ -31,7 +31,7 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   dark: {
-    backgroundColor: colors.primary,
+    backgroundColor: colors.primaryTint,
   },
   light: {
     backgroundColor: colors.surface,
@@ -41,5 +41,6 @@ const styles = StyleSheet.create({
   text: {
     fontSize: 11,
     lineHeight: 15,
+    fontWeight: '600',
   },
 });

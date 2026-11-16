@@ -1,25 +1,20 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
+import { AlertCircle, Check } from 'lucide-react-native';
 import React, { useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import Animated from 'react-native-reanimated';
 import { ContactListItem } from '../../components/contacts/ContactListItem';
-import { FavouriteContact } from '../../components/contacts/FavouriteContact';
 import { ScreenContainer } from '../../components/layout/ScreenContainer';
 import { ScreenHeader } from '../../components/layout/ScreenHeader';
 import { AppText } from '../../components/ui/AppText';
-import { Card } from '../../components/ui/Card';
-import { Divider } from '../../components/ui/Divider';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { ErrorState } from '../../components/ui/ErrorState';
 import { LoadingState } from '../../components/ui/LoadingState';
-import { SectionHeader } from '../../components/ui/SectionHeader';
-import { SegmentedTabs } from '../../components/ui/SegmentedTabs';
-import { listEnter } from '../../components/ui/motion';
 import { useCommunications } from '../../hooks/useCommunications';
 import { useContacts, useDebouncedValue } from '../../hooks/useContacts';
 import { contactService } from '../../services/contactService';
-import { colors, spacing } from '../../theme';
+import { colors, fontFamily, spacing } from '../../theme';
 import { Contact, ContactCategory } from '../../types';
 
 type ContactsTab = 'all' | ContactCategory;
@@ -97,10 +92,6 @@ export default function ContactsScreen() {
     );
   }, [contacts, tab, search]);
 
-  const favourites = useMemo(
-    () => (contacts ?? []).filter((c) => c.isFavourite),
-    [contacts],
-  );
   const groups = useMemo(() => groupByLetter(filtered), [filtered]);
 
   const openContact = (contact: Contact) =>
@@ -109,23 +100,28 @@ export default function ContactsScreen() {
   const header = (
     <ScreenHeader
       title="Contacts"
-      subtitle="From your ATS"
       showSearch
-      searchPlaceholder="Search name, number or email"
+      searchPlaceholder="Search name, number or company"
       searchValue={search}
       onSearchChange={setSearch}
     />
   );
+
+  const syncRunning = syncing || syncJob?.status === 'running';
+  const syncText = syncRunning
+    ? `Syncing with your ATS · ${syncJob?.processed ?? 0} processed`
+    : syncJob?.error
+      ? `ATS sync failed: ${syncJob.error}`
+      : syncJob?.finished_at
+        ? `Synced with your ATS · ${new Date(syncJob.finished_at).toLocaleString([], { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}`
+        : 'Synced with your ATS';
 
   return (
     <ScreenContainer header={header} padded={false}>
       {isLoading ? (
         <LoadingState label="Loading contacts…" />
       ) : isError ? (
-        <ErrorState
-          description="Could not load your ATS contacts."
-          onRetry={() => void refetch()}
-        />
+        <ErrorState description="Could not load your ATS contacts." onRetry={() => void refetch()} />
       ) : (
         <Animated.FlatList
           data={groups}
@@ -134,84 +130,76 @@ export default function ContactsScreen() {
           showsVerticalScrollIndicator={false}
           ListHeaderComponent={
             <View>
-              <View style={styles.tabs}>
-                <SegmentedTabs tabs={TABS} selected={tab} onSelect={setTab} />
-              </View>
-              {favourites.length > 0 && !search ? (
-                <View>
-                  <SectionHeader title="Favourites" />
-                  <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={styles.favourites}
-                  >
-                    {favourites.map((contact, index) => (
-                      <Animated.View
-                        key={contact.id}
-                        entering={listEnter(index)}
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.filters}
+              >
+                {TABS.map((t) => {
+                  const active = t.key === tab;
+                  return (
+                    <Pressable
+                      key={t.key}
+                      accessibilityRole="tab"
+                      accessibilityState={{ selected: active }}
+                      onPress={() => setTab(t.key)}
+                      style={[styles.filter, active && styles.filterActive]}
+                    >
+                      <AppText
+                        style={styles.filterText}
+                        color={active ? colors.white : colors.black}
                       >
-                        <FavouriteContact
-                          contact={contact}
-                          onPress={() => openContact(contact)}
-                        />
-                      </Animated.View>
-                    ))}
-                  </ScrollView>
-                </View>
-              ) : null}
-              <SectionHeader
-                title="All contacts"
-                actionLabel={
-                  syncing || syncJob?.status === 'running' ? 'Syncing…' : 'Sync ATS'
-                }
-                onAction={startSync}
-              />
-              {syncJob ? (
-                <Card style={styles.syncBanner}>
-                  <AppText
-                    variant="caption"
-                    color={syncJob.error ? colors.error : colors.success}
-                  >
-                    {syncJob.status === 'running'
-                      ? `Contact sync running · ${syncJob.processed} processed`
-                      : `Contact sync ${syncJob.status} · ${syncJob.processed} processed · ${syncJob.created} new · ${syncJob.updated} updated · ${syncJob.skipped} skipped`}
+                        {t.label}
+                      </AppText>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+              <View style={styles.syncRow}>
+                {syncJob?.error ? (
+                  <AlertCircle size={14} color={colors.red} />
+                ) : (
+                  <Check size={14} color={colors.mint} strokeWidth={2.6} />
+                )}
+                <AppText variant="caption" numberOfLines={1} style={styles.syncText}>
+                  {syncText}
+                </AppText>
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={startSync}
+                  disabled={syncRunning}
+                  hitSlop={8}
+                >
+                  <AppText style={styles.syncAction} color={colors.aiBlue}>
+                    {syncRunning ? 'Syncing…' : 'Sync now'}
                   </AppText>
-                </Card>
-              ) : null}
+                </Pressable>
+              </View>
             </View>
           }
           ListEmptyComponent={
             <EmptyState
               title="No contacts found"
               description={
-                search
-                  ? `Nothing in your ATS matches “${search}”.`
-                  : 'Contacts from your ATS will appear here.'
+                search ? `Nothing in your ATS matches “${search}”.` : 'Contacts from your ATS will appear here.'
               }
             />
           }
-          renderItem={({ item, index: groupIndex }) => (
-            <Animated.View
-              entering={listEnter(groupIndex)}
-            >
-              <Card padded={false} style={styles.groupCard}>
-                <AppText variant="bodyMedium" style={styles.groupLetter}>
-                  {item.letter}
-                </AppText>
-                <Divider />
-                {item.contacts.map((contact, index) => (
-                  <View key={contact.id}>
-                    {index > 0 ? <Divider /> : null}
-                    <ContactListItem
-                      contact={contact}
-                      onPress={() => openContact(contact)}
-                      onCall={() => startCall(contact.phone, contact)}
-                      onMessage={() => openConversation(contact, 'whatsapp')}
-                    />
-                  </View>
-                ))}
-              </Card>
-            </Animated.View>
+          renderItem={({ item }) => (
+            <View>
+              <AppText variant="sectionTitle" style={styles.groupLetter}>
+                {item.letter}
+              </AppText>
+              {item.contacts.map((contact) => (
+                <ContactListItem
+                  key={contact.id}
+                  contact={contact}
+                  onPress={() => openContact(contact)}
+                  onCall={() => startCall(contact.phone, contact)}
+                  onMessage={() => openConversation(contact, 'whatsapp')}
+                />
+              ))}
+            </View>
           )}
         />
       )}
@@ -220,25 +208,48 @@ export default function ContactsScreen() {
 }
 
 const styles = StyleSheet.create({
-  tabs: {
-    marginTop: spacing.lg,
-  },
   listContent: {
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.xxxl,
+    paddingBottom: spacing.xl,
   },
-  favourites: {
-    gap: spacing.md,
-    paddingVertical: spacing.xs,
+  filters: {
+    gap: spacing.sm,
+    paddingHorizontal: 20,
+    paddingTop: spacing.xs,
   },
-  groupCard: {
-    marginBottom: spacing.md,
+  filter: {
+    paddingHorizontal: 16,
+    height: 36,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: colors.line,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  syncBanner: {
-    marginBottom: spacing.md,
+  filterActive: {
+    backgroundColor: colors.black,
+    borderColor: colors.black,
+  },
+  filterText: {
+    fontFamily: fontFamily.bold,
+    fontSize: 13,
+  },
+  syncRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 20,
+    paddingTop: 12,
+  },
+  syncText: {
+    flex: 1,
+  },
+  syncAction: {
+    fontFamily: fontFamily.bold,
+    fontSize: 12,
   },
   groupLetter: {
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 4,
   },
 });

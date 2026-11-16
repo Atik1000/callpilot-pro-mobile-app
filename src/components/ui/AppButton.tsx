@@ -1,15 +1,17 @@
 import React from 'react';
 import { ActivityIndicator, StyleProp, StyleSheet, View, ViewStyle } from 'react-native';
-import { colors, radius, spacing } from '../../theme';
+import { colors, spacing } from '../../theme';
 import { AppText } from './AppText';
 import { PressableScale } from './motion';
 
 export type AppButtonVariant =
-  | 'primary' // black bg, white text
-  | 'secondary' // white bg, dark text, border
-  | 'light' // white bg, dark text
-  | 'accent' // light blue bg, blue text
-  | 'danger'; // red bg, white text
+  | 'primary' // AI Blue bg, white text — main actions
+  | 'secondary' // white bg, black text, black outline
+  | 'light' // white bg, black text (on black call screens)
+  | 'accent' // blue tint bg, blue text
+  | 'danger' // red bg, white text
+  | 'success' // mint bg, white text — Call / Answer
+  | 'dark'; // black bg, white text — automation actions
 
 interface AppButtonProps {
   label: string;
@@ -29,16 +31,20 @@ const backgrounds: Record<AppButtonVariant, string> = {
   primary: colors.primary,
   secondary: colors.surface,
   light: colors.surface,
-  accent: colors.blueLight,
-  danger: colors.error,
+  accent: colors.aiBlueTint,
+  danger: colors.red,
+  success: colors.mint,
+  dark: colors.black,
 };
 
 const labelColors: Record<AppButtonVariant, string> = {
   primary: '#FFFFFF',
-  secondary: colors.textPrimary,
-  light: colors.primary,
-  accent: colors.secondary,
+  secondary: colors.black,
+  light: colors.black,
+  accent: colors.aiBlueText,
   danger: '#FFFFFF',
+  success: '#FFFFFF',
+  dark: '#FFFFFF',
 };
 
 export function AppButton({
@@ -62,7 +68,7 @@ export function AppButton({
       accessibilityState={{ disabled: isInactive }}
       disabled={isInactive}
       onPress={onPress}
-      scaleTo={0.96}
+      scaleTo={0.98}
       style={[
         styles.base,
         compact ? styles.compact : styles.regular,
@@ -89,23 +95,24 @@ export function AppButton({
 
 const styles = StyleSheet.create({
   base: {
-    borderRadius: radius.pill,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
   },
   regular: {
-    minHeight: 52,
+    minHeight: 54,
     paddingHorizontal: spacing.xxl,
     paddingVertical: spacing.md,
   },
   compact: {
     minHeight: 44,
+    borderRadius: 12,
     paddingHorizontal: spacing.xl,
     paddingVertical: spacing.sm,
   },
   bordered: {
-    borderWidth: 1,
-    borderColor: colors.border,
+    borderWidth: 1.5,
+    borderColor: colors.black,
   },
   fullWidth: {
     alignSelf: 'stretch',

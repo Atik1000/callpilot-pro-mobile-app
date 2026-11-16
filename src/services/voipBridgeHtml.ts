@@ -93,6 +93,7 @@ export const voipBridgeHtml = `<!doctype html>
     client = null;
     call = null;
     incoming = null;
+    stopRing();
     if (old) {
       try { old.off && old.off('telnyx.notification'); } catch (e) {}
       try { old.disconnect(); } catch (e) {}
@@ -116,6 +117,7 @@ export const voipBridgeHtml = `<!doctype html>
         return;
       }
       incoming = c;
+      startRing();
       var o = c.options || {};
       post({
         type: 'incoming',
@@ -159,6 +161,7 @@ export const voipBridgeHtml = `<!doctype html>
         }
         if (isCurrent) call = null;
         if (isIncoming) incoming = null;
+        stopRing();
         phase('ended');
         break;
     }
@@ -211,15 +214,18 @@ export const voipBridgeHtml = `<!doctype html>
       call = incoming;
       call.__cpInbound = true;
       incoming = null;
+      stopRing();
       phase('connecting');
       return Promise.resolve(call.answer({ remoteElement: 'remoteAudio' })).then(playRemote);
     },
     decline: function () {
+      stopRing();
       var c = incoming;
       incoming = null;
       if (c) { try { c.hangup(); } catch (e) {} }
     },
     hangup: function () {
+      stopRing();
       var c = call || incoming;
       call = null;
       incoming = null;
@@ -237,6 +243,30 @@ export const voipBridgeHtml = `<!doctype html>
       if (call) call.dtmf(String(cmd.digit));
     }
   };
+
+  // Incoming-call ring for the browser/WebView engine (two-tone, UK style).
+  var ringCtx = null, ringTimer = null;
+  function ringBurst() {
+    try {
+      ringCtx = ringCtx || new (window.AudioContext || window.webkitAudioContext)();
+      var t = ringCtx.currentTime, g = ringCtx.createGain();
+      g.connect(ringCtx.destination);
+      [400, 450].forEach(function (f) {
+        var o = ringCtx.createOscillator(); o.frequency.value = f; o.connect(g);
+        o.start(t); o.stop(t + 1.0);
+      });
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(0.25, t + 0.03);
+      g.gain.setValueAtTime(0.25, t + 0.4);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.42);
+      g.gain.setValueAtTime(0.0001, t + 0.6);
+      g.gain.exponentialRampToValueAtTime(0.25, t + 0.63);
+      g.gain.setValueAtTime(0.25, t + 0.98);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 1.0);
+    } catch (e) {}
+  }
+  function startRing() { if (ringTimer) return; ringBurst(); ringTimer = setInterval(ringBurst, 3000); }
+  function stopRing() { if (ringTimer) { clearInterval(ringTimer); ringTimer = null; } }
 
   window.__callpilot = function (cmd) {
     var handler = cmd && commands[cmd.type];

@@ -8,7 +8,7 @@ import {
   Pause,
   Pencil,
   Volume2,
-  X,
+  PhoneOff,
 } from 'lucide-react-native';
 import React, { useEffect, useState } from 'react';
 import {
@@ -21,15 +21,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import Animated, {
-  Easing,
-  FadeIn,
-  useAnimatedStyle,
-  useSharedValue,
-  withRepeat,
-  withSequence,
-  withTiming,
-} from 'react-native-reanimated';
+import Animated, { FadeIn } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CallControlButton } from '../components/calls/CallControlButton';
 import { DialPad } from '../components/calls/DialPad';
@@ -67,22 +59,6 @@ export default function ActiveCallScreen() {
   const [noteOpen, setNoteOpen] = useState(false);
   const [noteText, setNoteText] = useState('');
   const [transferredTo, setTransferredTo] = useState<string | null>(null);
-
-  // The blue avatar ring breathes gently for the lifetime of the call.
-  const ringPulse = useSharedValue(0);
-  useEffect(() => {
-    ringPulse.value = withRepeat(
-      withSequence(
-        withTiming(1, { duration: 1400, easing: Easing.inOut(Easing.ease) }),
-        withTiming(0, { duration: 1400, easing: Easing.inOut(Easing.ease) }),
-      ),
-      -1,
-    );
-  }, [ringPulse]);
-  const ringStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: 1 + ringPulse.value * 0.045 }],
-    shadowOpacity: 0.35 + ringPulse.value * 0.4,
-  }));
 
   useEffect(() => {
     if (!activeCall) return;
@@ -147,7 +123,7 @@ export default function ActiveCallScreen() {
       {/* Caller */}
       <View style={styles.caller}>
         <Animated.View entering={popIn(40)}>
-          <Animated.View style={[styles.avatarRing, ringStyle]}>
+          <Animated.View style={styles.avatarRing}>
             <Avatar
               name={activeCall.displayName}
               size={96}
@@ -270,7 +246,7 @@ export default function ActiveCallScreen() {
             scaleTo={0.85}
             style={styles.endButton}
           >
-            <X size={28} color={colors.textPrimary} />
+            <PhoneOff size={28} color={colors.white} />
           </PressableScale>
         </Animated.View>
       </View>
@@ -408,15 +384,7 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   avatarRing: {
-    padding: 3,
-    borderRadius: 60,
-    borderWidth: 2,
-    borderColor: colors.secondary,
     marginBottom: spacing.md,
-    shadowColor: colors.secondary,
-    shadowOffset: { width: 0, height: 0 },
-    shadowRadius: 18,
-    elevation: 8,
   },
   callerName: {
     fontFamily: fontFamily.bold,
@@ -462,10 +430,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   endButton: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: '#FFFFFF',
+    width: 74,
+    height: 74,
+    borderRadius: 37,
+    backgroundColor: colors.red,
     alignItems: 'center',
     justifyContent: 'center',
   },

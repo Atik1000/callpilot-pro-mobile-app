@@ -1,14 +1,11 @@
 import React from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { Contact, Conversation } from '../../types';
-import { colors, spacing } from '../../theme';
+import { colors, fontFamily } from '../../theme';
 import { formatPhone } from '../../utils/formatPhone';
 import { formatListTime } from '../../utils/formatTime';
 import { AppText } from '../ui/AppText';
 import { Avatar } from '../ui/Avatar';
-import { Badge } from '../ui/Badge';
-import { Card } from '../ui/Card';
-import { PulsingDot } from '../ui/motion';
 
 interface ConversationListItemProps {
   conversation: Conversation;
@@ -16,82 +13,129 @@ interface ConversationListItemProps {
   onPress: () => void;
 }
 
-export function ConversationListItem({
-  conversation,
-  contact,
-  onPress,
-}: ConversationListItemProps) {
-  const name =
-    contact?.name ??
-    (conversation.contactId.startsWith('+')
-      ? formatPhone(conversation.contactId)
-      : 'Unknown');
+/** UI kit message row: avatar, name, "WhatsApp · preview", time and unread count. */
+export function ConversationListItem({ conversation, contact, onPress }: ConversationListItemProps) {
+  const isNumber = conversation.contactId.startsWith('+');
+  const name = contact?.name ?? (isNumber ? formatPhone(conversation.contactId) : 'Unknown');
   const unread = conversation.unreadCount > 0;
+  const whatsapp = conversation.channel === 'whatsapp';
+
   return (
-    <Card
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`Conversation with ${name}${unread ? `, ${conversation.unreadCount} unread` : ''}`}
       onPress={onPress}
-      accessibilityLabel={`Conversation with ${name}${unread ? ', unread' : ''}`}
-      style={styles.card}
+      style={({ pressed }) => [styles.row, pressed && styles.pressed]}
     >
-      <View style={styles.row}>
-        <Avatar name={name} size={46} />
-        <View style={styles.texts}>
-          <AppText variant="cardTitle" numberOfLines={1}>
+      {contact ? (
+        <Avatar name={name} size={44} />
+      ) : (
+        <View style={styles.unknown}>
+          <AppText style={styles.unknownText}>?</AppText>
+        </View>
+      )}
+      <View style={styles.texts}>
+        <View style={styles.topRow}>
+          <AppText variant="cardTitle" numberOfLines={1} style={styles.name}>
             {name}
           </AppText>
-          <View style={styles.previewRow}>
-            <Badge label={conversation.channel === 'whatsapp' ? 'WhatsApp' : 'SMS'} />
-            <AppText
-              variant="supporting"
-              color={unread ? colors.textPrimary : colors.textSecondary}
-              numberOfLines={1}
-              style={styles.preview}
-            >
-              {conversation.lastMessagePreview}
-            </AppText>
-          </View>
-          {contact?.phone ? (
-            <AppText variant="caption" color={colors.textSecondary} numberOfLines={1}>
-              {formatPhone(contact.phone)}
-            </AppText>
-          ) : null}
-        </View>
-        <View style={styles.meta}>
-          <AppText variant="caption" color={colors.textSecondary}>
+          <AppText
+            style={unread ? styles.timeUnread : styles.time}
+            color={unread ? colors.aiBlue : colors.black}
+          >
             {formatListTime(conversation.lastMessageAt)}
           </AppText>
-          {unread ? <PulsingDot color={colors.secondary} size={9} duration={2000} /> : null}
+        </View>
+        <View style={styles.bottomRow}>
+          <AppText variant="supporting" numberOfLines={1} style={styles.preview}>
+            <AppText style={styles.channel} color={whatsapp ? colors.mintText : colors.black}>
+              {whatsapp ? 'WhatsApp' : 'SMS'}
+            </AppText>
+            {' · '}
+            {conversation.lastMessagePreview}
+          </AppText>
+          {unread ? (
+            <View style={styles.count}>
+              <AppText style={styles.countText} color={colors.white}>
+                {conversation.unreadCount > 9 ? '9+' : String(conversation.unreadCount)}
+              </AppText>
+            </View>
+          ) : null}
         </View>
       </View>
-    </Card>
+    </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  card: {
-    marginBottom: spacing.md,
-  },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.md,
+    gap: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+  },
+  pressed: {
+    opacity: 0.6,
+  },
+  unknown: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    borderColor: colors.black,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  unknownText: {
+    fontFamily: fontFamily.extrabold,
+    fontSize: 15,
   },
   texts: {
     flex: 1,
-    gap: 4,
+    minWidth: 0,
+    gap: 3,
   },
-  previewRow: {
+  topRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
+    gap: 8,
+  },
+  name: {
+    flex: 1,
+  },
+  time: {
+    fontFamily: fontFamily.semibold,
+    fontSize: 12,
+  },
+  timeUnread: {
+    fontFamily: fontFamily.extrabold,
+    fontSize: 12,
+  },
+  bottomRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   preview: {
     flex: 1,
   },
-  meta: {
-    alignItems: 'flex-end',
-    gap: spacing.sm,
-    alignSelf: 'stretch',
+  channel: {
+    fontFamily: fontFamily.bold,
+    fontSize: 12.5,
+  },
+  count: {
+    minWidth: 20,
+    height: 20,
+    paddingHorizontal: 6,
+    borderRadius: 10,
+    backgroundColor: colors.aiBlue,
+    alignItems: 'center',
     justifyContent: 'center',
+  },
+  countText: {
+    fontFamily: fontFamily.extrabold,
+    fontSize: 11,
   },
 });
