@@ -129,7 +129,7 @@ export default function ChatDetailsScreen() {
       rightElement={
         contact ? (
           <IconButton
-            icon={<Phone size={19} color="#FFFFFF" />}
+            icon={<Phone size={19} color={colors.black} />}
             onPress={() => startCall(contact.phone, contact)}
             accessibilityLabel={`Call ${contact.name}`}
             size={44}
@@ -258,7 +258,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
   },
   separatorPill: {
-    backgroundColor: colors.surface,
+    backgroundColor: colors.lightGrey,
     borderRadius: radius.pill,
     paddingHorizontal: spacing.md,
     paddingVertical: 4,

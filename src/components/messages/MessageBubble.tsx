@@ -72,7 +72,7 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: radius.sm,
   },
   bubbleIn: {
-    backgroundColor: colors.surface,
+    backgroundColor: colors.lightGrey,
     borderBottomLeftRadius: radius.sm,
   },
   meta: {

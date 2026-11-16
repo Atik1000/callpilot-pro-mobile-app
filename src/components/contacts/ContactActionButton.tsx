@@ -27,7 +27,7 @@ export function ContactActionButton({ icon, label, onPress }: ContactActionButto
 const styles = StyleSheet.create({
   tile: {
     flex: 1,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.lightGrey,
     borderRadius: radius.md,
     alignItems: 'center',
     justifyContent: 'center',
