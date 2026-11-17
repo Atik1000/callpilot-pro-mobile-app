@@ -21,10 +21,14 @@ class CallPilotKeepAliveModule : Module() {
       val intent = Intent(context, KeepAliveService::class.java)
         .putExtra(KeepAliveService.EXTRA_TITLE, title)
         .putExtra(KeepAliveService.EXTRA_BODY, body)
+        .putExtra(KeepAliveService.EXTRA_FROM_APP, true)
+      LinePrefs.setEnabled(context, true)
       ContextCompat.startForegroundService(context, intent)
     }
 
     Function("stop") {
+      LinePrefs.setEnabled(context, false)
+      Ringer.stop()
       context.stopService(Intent(context, KeepAliveService::class.java))
       Notifications.clearIncomingCall(context)
     }
@@ -32,6 +36,31 @@ class CallPilotKeepAliveModule : Module() {
     /** Visible alert for a call that rings while the app is in the background. */
     Function("showIncomingCall") { caller: String, detail: String ->
       Notifications.showIncomingCall(context, caller, detail)
+    }
+
+    /** Loud ringtone + vibration (respects the phone's Silent/Vibrate switch). */
+    Function("startRinging") {
+      Ringer.start(context)
+    }
+
+    Function("stopRinging") {
+      Ringer.stop()
+    }
+
+    /** Lets the incoming-call screen appear over the lock screen and wake it, only while ringing. */
+    Function("setShowOverLockScreen") { on: Boolean ->
+      val activity = appContext.currentActivity ?: return@Function
+      activity.runOnUiThread {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O_MR1) {
+          activity.setShowWhenLocked(on)
+          activity.setTurnScreenOn(on)
+        } else {
+          @Suppress("DEPRECATION")
+          val flags = android.view.WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
+            android.view.WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
+          if (on) activity.window.addFlags(flags) else activity.window.clearFlags(flags)
+        }
+      }
     }
 
     Function("clearIncomingCall") {

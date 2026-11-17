@@ -15,6 +15,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppText } from '../components/ui/AppText';
 import { Avatar } from '../components/ui/Avatar';
 import { popIn, PressableScale, PulsingDot, rise } from '../components/ui/motion';
+import { keepAlive } from '../../modules/callpilot-keepalive/src';
 import { useCallStore } from '../store/callStore';
 import { colors, fontFamily, spacing } from '../theme';
 
@@ -28,6 +29,12 @@ export default function IncomingCallScreen() {
 
   // The avatar ring pulses while ringing.
   const ringPulse = useSharedValue(0);
+  // Show over the lock screen and wake the display only while this rings.
+  useEffect(() => {
+    keepAlive.setShowOverLockScreen(true);
+    return () => keepAlive.setShowOverLockScreen(false);
+  }, []);
+
   useEffect(() => {
     ringPulse.value = withRepeat(
       withSequence(

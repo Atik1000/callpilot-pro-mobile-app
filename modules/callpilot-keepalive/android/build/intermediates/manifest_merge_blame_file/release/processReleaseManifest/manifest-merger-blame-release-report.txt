@@ -24,26 +24,64 @@
 12    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 12-->/Users/atik/Desktop/callpilot/modules/callpilot-keepalive/android/src/main/AndroidManifest.xml:7:3-93
 12-->/Users/atik/Desktop/callpilot/modules/callpilot-keepalive/android/src/main/AndroidManifest.xml:7:20-90
-13
-14    <application>
-14-->/Users/atik/Desktop/callpilot/modules/callpilot-keepalive/android/src/main/AndroidManifest.xml:9:3-19:17
-15        <service
-15-->/Users/atik/Desktop/callpilot/modules/callpilot-keepalive/android/src/main/AndroidManifest.xml:10:5-18:15
-16            android:name="expo.modules.callpilotkeepalive.KeepAliveService"
-16-->/Users/atik/Desktop/callpilot/modules/callpilot-keepalive/android/src/main/AndroidManifest.xml:11:7-70
-17            android:exported="false"
-17-->/Users/atik/Desktop/callpilot/modules/callpilot-keepalive/android/src/main/AndroidManifest.xml:12:7-31
-18            android:foregroundServiceType="specialUse"
-18-->/Users/atik/Desktop/callpilot/modules/callpilot-keepalive/android/src/main/AndroidManifest.xml:14:7-49
-19            android:stopWithTask="false" >
-19-->/Users/atik/Desktop/callpilot/modules/callpilot-keepalive/android/src/main/AndroidManifest.xml:13:7-35
-20            <property
-20-->/Users/atik/Desktop/callpilot/modules/callpilot-keepalive/android/src/main/AndroidManifest.xml:15:7-17:126
-21                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-21-->/Users/atik/Desktop/callpilot/modules/callpilot-keepalive/android/src/main/AndroidManifest.xml:16:9-68
-22                android:value="Keeps the VoIP business line registered so incoming calls ring while the app is in the background." />
-22-->/Users/atik/Desktop/callpilot/modules/callpilot-keepalive/android/src/main/AndroidManifest.xml:17:9-123
-23        </service>
-24    </application>
-25
-26</manifest>
+13    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+13-->/Users/atik/Desktop/callpilot/modules/callpilot-keepalive/android/src/main/AndroidManifest.xml:8:3-79
+13-->/Users/atik/Desktop/callpilot/modules/callpilot-keepalive/android/src/main/AndroidManifest.xml:8:20-76
+14    <uses-permission android:name="android.permission.VIBRATE" />
+14-->/Users/atik/Desktop/callpilot/modules/callpilot-keepalive/android/src/main/AndroidManifest.xml:9:3-64
+14-->/Users/atik/Desktop/callpilot/modules/callpilot-keepalive/android/src/main/AndroidManifest.xml:9:20-61
+15    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+15-->/Users/atik/Desktop/callpilot/modules/callpilot-keepalive/android/src/main/AndroidManifest.xml:10:3-78
+15-->/Users/atik/Desktop/callpilot/modules/callpilot-keepalive/android/src/main/AndroidManifest.xml:10:20-75
+16
+17    <application>
+17-->/Users/atik/Desktop/callpilot/modules/callpilot-keepalive/android/src/main/AndroidManifest.xml:12:3-35:17
+18        <service
+18-->/Users/atik/Desktop/callpilot/modules/callpilot-keepalive/android/src/main/AndroidManifest.xml:13:5-21:15
+19            android:name="expo.modules.callpilotkeepalive.KeepAliveService"
+19-->/Users/atik/Desktop/callpilot/modules/callpilot-keepalive/android/src/main/AndroidManifest.xml:14:7-70
+20            android:exported="false"
+20-->/Users/atik/Desktop/callpilot/modules/callpilot-keepalive/android/src/main/AndroidManifest.xml:15:7-31
+21            android:foregroundServiceType="specialUse"
+21-->/Users/atik/Desktop/callpilot/modules/callpilot-keepalive/android/src/main/AndroidManifest.xml:17:7-49
+22            android:stopWithTask="false" >
+22-->/Users/atik/Desktop/callpilot/modules/callpilot-keepalive/android/src/main/AndroidManifest.xml:16:7-35
+23            <property
+23-->/Users/atik/Desktop/callpilot/modules/callpilot-keepalive/android/src/main/AndroidManifest.xml:18:7-20:126
+24                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+24-->/Users/atik/Desktop/callpilot/modules/callpilot-keepalive/android/src/main/AndroidManifest.xml:19:9-68
+25                android:value="Keeps the VoIP business line registered so incoming calls ring while the app is in the background." />
+25-->/Users/atik/Desktop/callpilot/modules/callpilot-keepalive/android/src/main/AndroidManifest.xml:20:9-123
+26        </service>
+27        <service
+27-->/Users/atik/Desktop/callpilot/modules/callpilot-keepalive/android/src/main/AndroidManifest.xml:22:5-24:34
+28            android:name="expo.modules.callpilotkeepalive.LineTaskService"
+28-->/Users/atik/Desktop/callpilot/modules/callpilot-keepalive/android/src/main/AndroidManifest.xml:23:7-69
+29            android:exported="false" />
+29-->/Users/atik/Desktop/callpilot/modules/callpilot-keepalive/android/src/main/AndroidManifest.xml:24:7-31
+30
+31        <receiver
+31-->/Users/atik/Desktop/callpilot/modules/callpilot-keepalive/android/src/main/AndroidManifest.xml:25:5-34:16
+32            android:name="expo.modules.callpilotkeepalive.BootReceiver"
+32-->/Users/atik/Desktop/callpilot/modules/callpilot-keepalive/android/src/main/AndroidManifest.xml:26:7-66
+33            android:exported="true" >
+33-->/Users/atik/Desktop/callpilot/modules/callpilot-keepalive/android/src/main/AndroidManifest.xml:27:7-30
+34            <intent-filter>
+34-->/Users/atik/Desktop/callpilot/modules/callpilot-keepalive/android/src/main/AndroidManifest.xml:28:7-33:23
+35                <action android:name="android.intent.action.BOOT_COMPLETED" />
+35-->/Users/atik/Desktop/callpilot/modules/callpilot-keepalive/android/src/main/AndroidManifest.xml:29:9-71
+35-->/Users/atik/Desktop/callpilot/modules/callpilot-keepalive/android/src/main/AndroidManifest.xml:29:17-68
+36                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+36-->/Users/atik/Desktop/callpilot/modules/callpilot-keepalive/android/src/main/AndroidManifest.xml:30:9-76
+36-->/Users/atik/Desktop/callpilot/modules/callpilot-keepalive/android/src/main/AndroidManifest.xml:30:17-73
+37                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+37-->/Users/atik/Desktop/callpilot/modules/callpilot-keepalive/android/src/main/AndroidManifest.xml:31:9-74
+37-->/Users/atik/Desktop/callpilot/modules/callpilot-keepalive/android/src/main/AndroidManifest.xml:31:17-71
+38                <action android:name="com.htc.intent.action.QUICKBOOT_POWERON" />
+38-->/Users/atik/Desktop/callpilot/modules/callpilot-keepalive/android/src/main/AndroidManifest.xml:32:9-74
+38-->/Users/atik/Desktop/callpilot/modules/callpilot-keepalive/android/src/main/AndroidManifest.xml:32:17-71
+39            </intent-filter>
+40        </receiver>
+41    </application>
+42
+43</manifest>

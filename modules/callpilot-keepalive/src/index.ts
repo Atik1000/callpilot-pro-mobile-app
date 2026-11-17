@@ -10,6 +10,9 @@ interface NativeKeepAlive {
   stop(): void;
   showIncomingCall(caller: string, detail: string): void;
   clearIncomingCall(): void;
+  startRinging(): void;
+  stopRinging(): void;
+  setShowOverLockScreen(on: boolean): void;
   isIgnoringBatteryOptimizations(): boolean;
   requestIgnoreBatteryOptimizations(): void;
 }
@@ -40,6 +43,10 @@ export const keepAlive = {
   showIncomingCall: (caller: string, detail: string) =>
     safe(() => native!.showIncomingCall(caller, detail), undefined),
   clearIncomingCall: () => safe(() => native!.clearIncomingCall(), undefined),
+  /** Loud ringtone + vibration; returns false when the native ringer is missing. */
+  startRinging: () => safe(() => (native!.startRinging(), true), false),
+  stopRinging: () => safe(() => native!.stopRinging(), undefined),
+  setShowOverLockScreen: (on: boolean) => safe(() => native!.setShowOverLockScreen(on), undefined),
   isIgnoringBatteryOptimizations: () => safe(() => native!.isIgnoringBatteryOptimizations(), true),
   requestIgnoreBatteryOptimizations: () =>
     safe(() => native!.requestIgnoreBatteryOptimizations(), undefined),

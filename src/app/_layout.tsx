@@ -72,14 +72,19 @@ export default function RootLayout() {
     }
   }, [signedIn]);
 
-  // The VoIP phone registers while signed in and tears down on sign-out.
+  // The VoIP phone registers while signed in and tears down only on sign-out.
+  // No unmount cleanup: closing/swiping the app destroys this screen, but the
+  // line must stay registered in the background service to receive calls.
+  const wasSignedIn = useRef(false);
   useEffect(() => {
     const { initVoip, shutdownVoip } = useCallStore.getState();
     if (signedIn) {
+      wasSignedIn.current = true;
       initVoip();
-      return () => shutdownVoip();
+    } else if (wasSignedIn.current) {
+      wasSignedIn.current = false;
+      shutdownVoip();
     }
-    return undefined;
   }, [signedIn]);
 
   // An incoming Telnyx call surfaces the full-screen incoming call UI.

@@ -112,6 +112,8 @@ function buildActiveCall(
  * per launch, only when needed.
  */
 let batteryPromptShown = false;
+let voipInitialised = false;
+
 function askBatteryExemptionOnce() {
   if (batteryPromptShown || !keepAlive.available) return;
   if (keepAlive.isIgnoringBatteryOptimizations()) return;
@@ -260,14 +262,19 @@ export const useCallStore = create<CallState>((set, get) => {
     },
 
     initVoip: () => {
+      // Keep the line alive while the app is minimised or closed (Android).
+      keepAlive.start('CallPilot', 'Ready for calls on your business line');
+      if (AppState.currentState === 'active') askBatteryExemptionOnce();
+      // Already registered (e.g. started in the background, then the app was
+      // opened): don't reconnect, it would drop a call that is ringing.
+      if (voipInitialised) return;
+      voipInitialised = true;
       voipService.setListener(voipListener);
       void voipService.connect();
-      // Keep the line alive while the app is minimised (Android).
-      keepAlive.start('CallPilot', 'Ready for calls on your business line');
-      askBatteryExemptionOnce();
     },
 
     shutdownVoip: () => {
+      voipInitialised = false;
       keepAlive.stop();
       void voipService.disconnect();
       voipService.setListener(null);

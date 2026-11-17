@@ -58,10 +58,20 @@ class KeepAliveService : Service() {
         .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "CallPilot::KeepAlive")
         .apply { setReferenceCounted(false); acquire() }
     }
+
+    // Started by Android (sticky restart), a reboot or an app update rather
+    // than by the running app: boot the JS line task so the phone registers.
+    if (intent?.getBooleanExtra(EXTRA_FROM_APP, false) != true) {
+      try {
+        com.facebook.react.HeadlessJsTaskService.acquireWakeLockNow(this)
+        startService(Intent(this, LineTaskService::class.java))
+      } catch (_: Exception) {}
+    }
     return START_STICKY
   }
 
   override fun onDestroy() {
+    Ringer.stop()
     wakeLock?.let { if (it.isHeld) it.release() }
     wakeLock = null
     super.onDestroy()
@@ -70,6 +80,7 @@ class KeepAliveService : Service() {
   companion object {
     const val EXTRA_TITLE = "title"
     const val EXTRA_BODY = "body"
+    const val EXTRA_FROM_APP = "fromApp"
   }
 }
 
