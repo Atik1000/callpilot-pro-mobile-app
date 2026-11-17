@@ -1,9 +1,0 @@
-expo.modules.callpilotkeepalive.callpilot-keepalive-pngs-0 /Users/atik/Desktop/callpilot/modules/callpilot-keepalive/android/build/generated/res/pngs/release
-expo.modules.callpilotkeepalive.callpilot-keepalive-updated_navigation_xml-1 /Users/atik/Desktop/callpilot/modules/callpilot-keepalive/android/build/generated/updated_navigation_xml/release
-expo.modules.callpilotkeepalive.callpilot-keepalive-mergeReleaseResources-2 /Users/atik/Desktop/callpilot/modules/callpilot-keepalive/android/build/intermediates/incremental/release/mergeReleaseResources/merged.dir
-expo.modules.callpilotkeepalive.callpilot-keepalive-mergeReleaseResources-3 /Users/atik/Desktop/callpilot/modules/callpilot-keepalive/android/build/intermediates/incremental/release/mergeReleaseResources/stripped.dir
-expo.modules.callpilotkeepalive.callpilot-keepalive-release-4 /Users/atik/Desktop/callpilot/modules/callpilot-keepalive/android/build/intermediates/merged_res/release/mergeReleaseResources
-expo.modules.callpilotkeepalive.callpilot-keepalive-release-5 /Users/atik/Desktop/callpilot/modules/callpilot-keepalive/android/build/intermediates/packaged_res/release/packageReleaseResources
-expo.modules.callpilotkeepalive.callpilot-keepalive-main-6 /Users/atik/Desktop/callpilot/modules/callpilot-keepalive/android/src/main/res
-expo.modules.callpilotkeepalive.callpilot-keepalive-release-7 /Users/atik/Desktop/callpilot/modules/callpilot-keepalive/android/src/release/res
-gradleHome-0 /Users/atik/.gradle
