@@ -1,5 +1,4 @@
 import { useRouter } from 'expo-router';
-import { Phone } from 'lucide-react-native';
 import React, { useEffect, useMemo, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import Animated from 'react-native-reanimated';
@@ -13,20 +12,17 @@ import { EmptyState } from '../../components/ui/EmptyState';
 import { ErrorState } from '../../components/ui/ErrorState';
 import { LoadingState } from '../../components/ui/LoadingState';
 import { SegmentedTabs } from '../../components/ui/SegmentedTabs';
-import { StatusBadge } from '../../components/ui/StatusBadge';
-import { listEnter, popIn, PressableScale } from '../../components/ui/motion';
+import { listEnter } from '../../components/ui/motion';
 import { useCommunications } from '../../hooks/useCommunications';
 import { findContactByPhone, useContacts } from '../../hooks/useContacts';
-import { useAuthStore } from '../../store/authStore';
 import { useCallStore } from '../../store/callStore';
-import { useSettingsStore } from '../../store/settingsStore';
-import { colors, radius, spacing } from '../../theme';
+import { spacing } from '../../theme';
 import { Call } from '../../types';
 
 type CallsTab = 'recent' | 'missed' | 'voicemail';
 
 const TABS = [
-  { key: 'recent' as const, label: 'Recent' },
+  { key: 'recent' as const, label: 'All' },
   { key: 'missed' as const, label: 'Missed' },
   { key: 'voicemail' as const, label: 'Voicemail' },
 ];
@@ -34,12 +30,11 @@ const TABS = [
 export default function CallsScreen() {
   const router = useRouter();
   const [tab, setTab] = useState<CallsTab>('recent');
-  const [search, setSearch] = useState('');
+  // Search lives on Contacts in the UI kit; Calls is a plain grouped log.
+  const search = '';
   const [expandedVoicemailId, setExpandedVoicemailId] = useState<string | null>(null);
   const [addNumber, setAddNumber] = useState<string | null>(null);
 
-  const businessNumber = useAuthStore((s) => s.user?.businessNumber);
-  const availability = useSettingsStore((s) => s.availability);
   const { status, calls, voicemails, callContacts, load, markVoicemailRead } =
     useCallStore();
   const { data: contacts, isLoading: contactsLoading, isError, refetch } = useContacts();
@@ -110,23 +105,10 @@ export default function CallsScreen() {
   const hasError = status === 'error';
   if (isError && __DEV__) console.warn('[calls] contacts failed to load');
 
-  const header = (
-    <ScreenHeader
-      title="Calls"
-      subtitle={`Business line · ${businessNumber ?? ''}`}
-      showSearch
-      searchPlaceholder="Search ATS contacts"
-      searchValue={search}
-      onSearchChange={setSearch}
-      rightElement={
-        <StatusBadge
-          label={availability === 'available' ? 'Available' : 'Do not disturb'}
-          tone={availability === 'available' ? 'info' : 'warning'}
-          pulse={availability === 'available'}
-        />
-      }
-    />
-  );
+  const header = <ScreenHeader title="Calls" />;
+
+  // Calls grouped under TODAY / YESTERDAY / date labels, newest first.
+  const rows = useMemo(() => groupByDay(filteredCalls), [filteredCalls]);
 
   let body: React.ReactNode;
   if (isLoading) {
@@ -178,9 +160,9 @@ export default function CallsScreen() {
   } else {
     body = (
       <Animated.FlatList
-        data={filteredCalls}
-        keyExtractor={(c) => c.id}
-        contentContainerStyle={styles.listContent}
+        data={rows}
+        keyExtractor={(row) => row.key}
+        contentContainerStyle={styles.callListContent}
         showsVerticalScrollIndicator={false}
         ListEmptyComponent={
           <EmptyState
@@ -192,19 +174,21 @@ export default function CallsScreen() {
             }
           />
         }
-        renderItem={({ item, index }) => (
-          <Animated.View entering={listEnter(index)}>
+        renderItem={({ item: row }) =>
+          row.kind === 'header' ? (
+            <AppText variant="sectionTitle" style={styles.dayLabel}>
+              {row.label}
+            </AppText>
+          ) : (
             <CallListItem
-              call={item}
-              contact={contactForCall(item)}
-              onPress={() => openCall(item)}
-              onAddUnknown={() => setAddNumber(item.phoneNumber)}
-              onCallBack={() =>
-                startCall(item.phoneNumber, contactForCall(item))
-              }
+              call={row.call}
+              contact={contactForCall(row.call)}
+              onPress={() => openCall(row.call)}
+              onAddUnknown={() => setAddNumber(row.call.phoneNumber)}
+              onCallBack={() => startCall(row.call.phoneNumber, contactForCall(row.call))}
             />
-          </Animated.View>
-        )}
+          )
+        }
       />
     );
   }
@@ -215,22 +199,6 @@ export default function CallsScreen() {
         <SegmentedTabs tabs={TABS} selected={tab} onSelect={setTab} />
       </View>
       <View style={styles.list}>{body}</View>
-
-      {/* Floating Keypad button */}
-      <Animated.View entering={popIn(175)} style={styles.fabWrap}>
-        <PressableScale
-          accessibilityRole="button"
-          accessibilityLabel="Open keypad"
-          onPress={() => router.push('/keypad')}
-          scaleTo={0.9}
-          style={styles.keypadFab}
-        >
-          <Phone size={18} color="#FFFFFF" />
-          <AppText variant="button" color="#FFFFFF">
-            Keypad
-          </AppText>
-        </PressableScale>
-      </Animated.View>
 
       <ConfirmationModal
         visible={addNumber !== null}
@@ -244,31 +212,54 @@ export default function CallsScreen() {
   );
 }
 
+type CallRow =
+  | { kind: 'header'; key: string; label: string }
+  | { kind: 'call'; key: string; call: Call };
+
+function dayLabel(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return 'Earlier';
+  const start = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const days = Math.round((start(new Date()) - start(d)) / 86400000);
+  if (days === 0) return 'Today';
+  if (days === 1) return 'Yesterday';
+  if (days < 7) return d.toLocaleDateString([], { weekday: 'long' });
+  return d.toLocaleDateString([], { day: 'numeric', month: 'short' });
+}
+
+function groupByDay(calls: Call[]): CallRow[] {
+  const rows: CallRow[] = [];
+  let current = '';
+  for (const call of calls) {
+    const label = dayLabel(call.timestamp);
+    if (label !== current) {
+      current = label;
+      rows.push({ kind: 'header', key: `h-${label}-${call.id}`, label });
+    }
+    rows.push({ kind: 'call', key: call.id, call });
+  }
+  return rows;
+}
+
 const styles = StyleSheet.create({
   tabs: {
-    paddingHorizontal: spacing.lg,
-    marginTop: spacing.lg,
+    paddingHorizontal: 20,
+    paddingBottom: spacing.sm,
   },
   list: {
     flex: 1,
   },
   listContent: {
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.lg,
-    paddingBottom: 120,
+    paddingHorizontal: 20,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.xxl,
   },
-  fabWrap: {
-    position: 'absolute',
-    right: spacing.lg,
-    bottom: spacing.xl,
+  callListContent: {
+    paddingBottom: spacing.sm,
   },
-  keypadFab: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    backgroundColor: colors.primary,
-    borderRadius: radius.pill,
-    paddingHorizontal: spacing.xxl,
-    paddingVertical: spacing.lg,
+  dayLabel: {
+    paddingTop: 16,
+    paddingBottom: 6,
+    paddingHorizontal: 20,
   },
 });

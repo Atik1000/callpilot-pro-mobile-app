@@ -1,5 +1,6 @@
 import Constants, { ExecutionEnvironment } from 'expo-constants';
-import { PermissionsAndroid, Platform } from 'react-native';
+import { AppState, PermissionsAndroid, Platform } from 'react-native';
+import { keepAlive } from '../../modules/callpilot-keepalive/src';
 import { apiRequest } from './api';
 import { SERVICE_MODE } from './config';
 
@@ -286,6 +287,34 @@ class NativeVoipService implements VoipEngine {
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private connecting = false;
   private stopped = true;
+  /** Re-registers the line if the socket silently died (screen off, Doze, network swap). */
+  private watchdog: ReturnType<typeof setInterval> | null = null;
+  private appStateSub: { remove(): void } | null = null;
+
+  private startWatchdog() {
+    if (!this.watchdog) {
+      this.watchdog = setInterval(() => this.ensureOnline(), 45000);
+    }
+    if (!this.appStateSub) {
+      this.appStateSub = AppState.addEventListener('change', (state) => {
+        if (state === 'active') this.ensureOnline();
+      });
+    }
+  }
+
+  private stopWatchdog() {
+    if (this.watchdog) clearInterval(this.watchdog);
+    this.watchdog = null;
+    this.appStateSub?.remove();
+    this.appStateSub = null;
+  }
+
+  /** Reconnects only when the line is down and nothing is in progress. */
+  private ensureOnline() {
+    if (this.stopped || this.connecting || this.reconnectTimer) return;
+    if (this.currentCall || this.incomingCall) return;
+    if (!this.clientReady || !this.client) void this.connect();
+  }
 
   setListener(listener: VoipListener | null) {
     this.listener = listener;
@@ -335,6 +364,7 @@ class NativeVoipService implements VoipEngine {
     if (this.connecting) return;
     this.stopped = false;
     this.connecting = true;
+    this.startWatchdog();
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
@@ -382,6 +412,7 @@ class NativeVoipService implements VoipEngine {
         }
         this.incomingCall = call;
         this.watchCall(call);
+        this.startRinging();
         this.listener?.onIncoming({
           phoneNumber: msg?.params?.caller_id_number || 'Unknown number',
           callerName: msg?.params?.caller_id_name || undefined,
@@ -423,6 +454,7 @@ class NativeVoipService implements VoipEngine {
 
   async disconnect(): Promise<void> {
     this.stopped = true;
+    this.stopWatchdog();
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
@@ -504,6 +536,7 @@ class NativeVoipService implements VoipEngine {
   async answer(): Promise<void> {
     const call = this.incomingCall;
     if (!call) throw new Error('No incoming call to answer.');
+    this.stopRinging();
     await ensureMicrophonePermission();
     this.currentCall = call;
     this.incomingCall = null;
@@ -512,6 +545,7 @@ class NativeVoipService implements VoipEngine {
   }
 
   decline(): void {
+    this.stopRinging();
     const call = this.incomingCall;
     this.incomingCall = null;
     if (call) {
@@ -564,6 +598,33 @@ class NativeVoipService implements VoipEngine {
     } catch {}
   }
 
+  /** Phone's default ringtone + vibration while an incoming call rings. */
+  private ringing = false;
+  private startRinging(): void {
+    if (this.ringing) return;
+    // Native ringer: phone ringtone at full ring volume + vibration, also
+    // while the app is in the background (60s cap in case a stop is missed).
+    if (keepAlive.startRinging()) {
+      this.ringing = true;
+      return;
+    }
+    const icm = this.getInCallManager();
+    if (!icm) return;
+    try {
+      icm.startRingtone('_DEFAULT_', [0, 900, 700], 'playback', 45);
+      this.ringing = true;
+    } catch {}
+  }
+
+  private stopRinging(): void {
+    if (!this.ringing) return;
+    this.ringing = false;
+    keepAlive.stopRinging();
+    try {
+      this.getInCallManager()?.stopRingtone();
+    } catch {}
+  }
+
   private startAudioSession(): void {
     const icm = this.getInCallManager();
     try {
@@ -572,6 +633,7 @@ class NativeVoipService implements VoipEngine {
   }
 
   private finishCall(): void {
+    this.stopRinging();
     this.currentCall = null;
     this.incomingCall = null;
     this.endReason = null;

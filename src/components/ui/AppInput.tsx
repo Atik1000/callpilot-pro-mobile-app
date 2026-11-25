@@ -9,7 +9,7 @@ import {
   View,
   ViewStyle,
 } from 'react-native';
-import { colors, fontFamily, radius, spacing } from '../../theme';
+import { colors, fontFamily, spacing } from '../../theme';
 import { AppText } from './AppText';
 
 interface AppInputProps extends TextInputProps {
@@ -86,13 +86,13 @@ export function AppInput({
 
 const styles = StyleSheet.create({
   label: {
-    marginBottom: spacing.sm,
+    marginBottom: 7,
   },
   field: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: radius.md,
-    borderWidth: 1,
+    borderRadius: 14,
+    borderWidth: 1.5,
     minHeight: 52,
     paddingHorizontal: spacing.lg,
   },

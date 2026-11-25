@@ -26,7 +26,7 @@ export function ToggleRow({ title, subtitle, value, onToggle }: ToggleRowProps) 
         accessibilityLabel={title}
         value={value}
         onValueChange={onToggle}
-        trackColor={{ false: colors.border, true: colors.secondary }}
+        trackColor={{ false: '#D5D9DF', true: colors.mint }}
         thumbColor="#FFFFFF"
       />
     </View>

@@ -23,7 +23,9 @@ export function CallControlButton({ icon, label, onPress, active = false }: Call
         scaleTo={0.85}
         style={[styles.circle, active && styles.circleActive]}
       >
-        {icon}
+        {React.isValidElement<{ color?: string }>(icon)
+          ? React.cloneElement(icon, { color: active ? colors.black : colors.white })
+          : icon}
       </PressableScale>
       <AppText variant="supporting" color="#FFFFFF">
         {label}
@@ -39,9 +41,9 @@ const styles = StyleSheet.create({
     width: 84,
   },
   circle: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
     backgroundColor: colors.darkControl,
     alignItems: 'center',
     justifyContent: 'center',

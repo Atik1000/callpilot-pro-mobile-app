@@ -27,8 +27,18 @@ export interface SendMessageInput {
 
 const liveMessageService = {
   async getInbox(): Promise<Inbox> {
-    const data = await jigsaw<{ results: ApiMessage[] }>('messages/?limit=500');
-    const messages = (data.results ?? [])
+    // The API caps `limit` at 100, so page with offset (up to 500 messages).
+    const PAGE = 100;
+    const raw: ApiMessage[] = [];
+    for (let offset = 0; offset < 500; offset += PAGE) {
+      const page = await jigsaw<{ results: ApiMessage[]; next?: string | null }>(
+        `messages/?limit=${PAGE}&offset=${offset}`,
+      );
+      const results = page.results ?? [];
+      raw.push(...results);
+      if (!page.next || results.length < PAGE) break;
+    }
+    const messages = raw
       .map(mapMessage)
       .filter((m): m is Message => m !== null)
       .sort((a, b) => a.timestamp.localeCompare(b.timestamp));

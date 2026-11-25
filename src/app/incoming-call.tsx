@@ -15,6 +15,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppText } from '../components/ui/AppText';
 import { Avatar } from '../components/ui/Avatar';
 import { popIn, PressableScale, PulsingDot, rise } from '../components/ui/motion';
+import { keepAlive } from '../../modules/callpilot-keepalive/src';
 import { useCallStore } from '../store/callStore';
 import { colors, fontFamily, spacing } from '../theme';
 
@@ -28,6 +29,12 @@ export default function IncomingCallScreen() {
 
   // The avatar ring pulses while ringing.
   const ringPulse = useSharedValue(0);
+  // Show over the lock screen and wake the display only while this rings.
+  useEffect(() => {
+    keepAlive.setShowOverLockScreen(true);
+    return () => keepAlive.setShowOverLockScreen(false);
+  }, []);
+
   useEffect(() => {
     ringPulse.value = withRepeat(
       withSequence(
@@ -156,15 +163,7 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   avatarRing: {
-    padding: 3,
-    borderRadius: 64,
-    borderWidth: 2,
-    borderColor: colors.secondary,
     marginBottom: spacing.md,
-    shadowColor: colors.secondary,
-    shadowOffset: { width: 0, height: 0 },
-    shadowRadius: 22,
-    elevation: 8,
   },
   callerName: {
     fontFamily: fontFamily.bold,
@@ -187,9 +186,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   decline: {
-    backgroundColor: '#E5484D',
+    backgroundColor: colors.red,
   },
   answer: {
-    backgroundColor: '#30A46C',
+    backgroundColor: colors.mint,
   },
 });

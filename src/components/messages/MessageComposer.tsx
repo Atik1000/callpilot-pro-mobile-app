@@ -31,7 +31,7 @@ export function MessageComposer({ onSend, onAttach, value, onChangeText }: Messa
         onPress={onAttach}
         accessibilityLabel="Add attachment"
         size={46}
-        backgroundColor={colors.surface}
+        backgroundColor={colors.lightGrey}
       />
       <TextInput
         value={text}
@@ -64,7 +64,7 @@ const styles = StyleSheet.create({
   },
   input: {
     flex: 1,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.lightGrey,
     borderRadius: radius.pill,
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.md,

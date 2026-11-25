@@ -1,10 +1,11 @@
 import {
-  Inter_400Regular,
-  Inter_500Medium,
-  Inter_600SemiBold,
-  Inter_700Bold,
+  PlusJakartaSans_400Regular,
+  PlusJakartaSans_500Medium,
+  PlusJakartaSans_600SemiBold,
+  PlusJakartaSans_700Bold,
+  PlusJakartaSans_800ExtraBold,
   useFonts,
-} from '@expo-google-fonts/inter';
+} from '@expo-google-fonts/plus-jakarta-sans';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import * as Notifications from 'expo-notifications';
 import { Href, router, Stack } from 'expo-router';
@@ -29,10 +30,11 @@ const queryClient = new QueryClient({
 export default function RootLayout() {
   const signedIn = useAuthStore((s) => s.stage === 'signedIn');
   const [fontsLoaded, fontError] = useFonts({
-    Inter_400Regular,
-    Inter_500Medium,
-    Inter_600SemiBold,
-    Inter_700Bold,
+    PlusJakartaSans_400Regular,
+    PlusJakartaSans_500Medium,
+    PlusJakartaSans_600SemiBold,
+    PlusJakartaSans_700Bold,
+    PlusJakartaSans_800ExtraBold,
   });
   // A notification tapped before sign-in finishes restoring is kept here
   // and opened once the protected screens become available.
@@ -70,14 +72,19 @@ export default function RootLayout() {
     }
   }, [signedIn]);
 
-  // The VoIP phone registers while signed in and tears down on sign-out.
+  // The VoIP phone registers while signed in and tears down only on sign-out.
+  // No unmount cleanup: closing/swiping the app destroys this screen, but the
+  // line must stay registered in the background service to receive calls.
+  const wasSignedIn = useRef(false);
   useEffect(() => {
     const { initVoip, shutdownVoip } = useCallStore.getState();
     if (signedIn) {
+      wasSignedIn.current = true;
       initVoip();
-      return () => shutdownVoip();
+    } else if (wasSignedIn.current) {
+      wasSignedIn.current = false;
+      shutdownVoip();
     }
-    return undefined;
   }, [signedIn]);
 
   // An incoming Telnyx call surfaces the full-screen incoming call UI.

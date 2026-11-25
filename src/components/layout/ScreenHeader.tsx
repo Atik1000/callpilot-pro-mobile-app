@@ -1,59 +1,101 @@
+import { router } from 'expo-router';
+import { ChevronLeft } from 'lucide-react-native';
 import React from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors, radius, spacing } from '../../theme';
+import { useAuthStore } from '../../store/authStore';
+import { useSettingsStore } from '../../store/settingsStore';
+import { colors, fontFamily, spacing } from '../../theme';
+import { getInitials } from '../../utils/getInitials';
 import { AppText } from '../ui/AppText';
 import { SearchBar } from '../ui/SearchBar';
 
 interface ScreenHeaderProps {
   title: string;
+  /** Kept for call sites; the UI kit headers show no subtitle. */
   subtitle?: string;
   showSearch?: boolean;
   searchPlaceholder?: string;
   searchValue?: string;
   onSearchChange?: (value: string) => void;
+  /** Optional round action left of the status chip (e.g. compose, add). */
+  action?: React.ReactNode;
+  /** Status chip + profile avatar (hidden on Settings itself). */
+  showStatus?: boolean;
+  /** Shows a back chevron before the title (Settings). */
+  showBack?: boolean;
+  /** @deprecated replaced by the built-in status chip. */
   rightElement?: React.ReactNode;
 }
 
 /**
- * Blue, center-aligned top header with rounded bottom corners, used by all main tab
- * screens (Calls, Contacts, Messages, Alerts, Settings).
+ * UI kit header: white, large left-aligned title, then an "Available" chip
+ * and the user's initials (both open Settings). Optional search below.
  */
 export function ScreenHeader({
   title,
-  subtitle,
   showSearch = false,
   searchPlaceholder = 'Search',
   searchValue = '',
   onSearchChange,
-  rightElement,
+  action,
+  showStatus = true,
+  showBack = false,
 }: ScreenHeaderProps) {
   const insets = useSafeAreaInsets();
+  const userName = useAuthStore((s) => s.user?.name ?? '');
+  const available = useSettingsStore((s) => s.availability === 'available');
+  const openSettings = () => router.navigate('/(tabs)/settings');
+
   return (
-    <View style={[styles.container, { paddingTop: insets.top + spacing.xl }]}>
-      <View style={styles.titles}>
-        <AppText variant="screenTitle" color={colors.headerText} align="center">
+    <View style={[styles.container, { paddingTop: insets.top + spacing.lg }]}>
+      <View style={styles.row}>
+        {showBack ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Back"
+            onPress={() => (router.canGoBack() ? router.back() : router.navigate('/(tabs)/calls'))}
+            hitSlop={10}
+            style={({ pressed }) => [styles.back, pressed && styles.pressed]}
+          >
+            <ChevronLeft size={26} color={colors.black} />
+          </Pressable>
+        ) : null}
+        <AppText variant="screenTitle" numberOfLines={1} style={styles.title}>
           {title}
         </AppText>
-        {subtitle ? (
-          <AppText
-            variant="supporting"
-            color={colors.headerTextSecondary}
-            align="center"
-            style={styles.subtitle}
-          >
-            {subtitle}
-          </AppText>
+        {showStatus ? (
+          <View style={styles.right}>
+            {action}
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Status: ${available ? 'Available' : 'Do not disturb'}. Open settings`}
+              onPress={openSettings}
+              hitSlop={6}
+              style={({ pressed }) => [styles.chip, pressed && styles.pressed]}
+            >
+              <View
+                style={[styles.dot, { backgroundColor: available ? colors.mint : colors.amber }]}
+              />
+              <AppText style={styles.chipText}>{available ? 'Available' : 'Do not disturb'}</AppText>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Settings and profile"
+              onPress={openSettings}
+              hitSlop={4}
+              style={({ pressed }) => [styles.me, pressed && styles.pressed]}
+            >
+              <AppText style={styles.meText} color={colors.white}>
+                {getInitials(userName || 'Me')}
+              </AppText>
+            </Pressable>
+          </View>
         ) : null}
-        {rightElement ? <View style={styles.extra}>{rightElement}</View> : null}
       </View>
       {showSearch && onSearchChange ? (
         <View style={styles.search}>
-          <SearchBar
-            value={searchValue}
-            onChangeText={onSearchChange}
-            placeholder={searchPlaceholder}
-          />
+          <SearchBar value={searchValue} onChangeText={onSearchChange} placeholder={searchPlaceholder} />
         </View>
       ) : null}
     </View>
@@ -62,22 +104,67 @@ export function ScreenHeader({
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: colors.headerBackground,
-    borderBottomLeftRadius: radius.xxl,
-    borderBottomRightRadius: radius.xxl,
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.xl,
+    backgroundColor: colors.white,
+    paddingHorizontal: 20,
+    paddingBottom: spacing.md,
   },
-  titles: {
+  row: {
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.md,
   },
-  subtitle: {
-    marginTop: 2,
+  title: {
+    flexShrink: 1,
+    flexGrow: 1,
   },
-  extra: {
-    marginTop: spacing.sm,
+  back: {
+    marginLeft: -6,
+    marginRight: -4,
+  },
+  right: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 6,
+    paddingLeft: 10,
+    paddingRight: 12,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: colors.line,
+  },
+  dot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  chipText: {
+    fontFamily: fontFamily.bold,
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  me: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.black,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  meText: {
+    fontFamily: fontFamily.extrabold,
+    fontSize: 11,
+    lineHeight: 14,
   },
   search: {
-    marginTop: spacing.lg,
+    marginTop: 14,
+  },
+  pressed: {
+    opacity: 0.6,
   },
 });

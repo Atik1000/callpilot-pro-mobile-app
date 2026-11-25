@@ -106,8 +106,8 @@ export default function ContactRecordScreen() {
           icon={
             <Star
               size={19}
-              color="#FFFFFF"
-              fill={isFavourite ? '#FFFFFF' : 'transparent'}
+              color={colors.black}
+              fill={isFavourite ? colors.black : "transparent"}
             />
           }
           onPress={toggleFavourite}
@@ -118,7 +118,7 @@ export default function ContactRecordScreen() {
       }
     >
       <View style={styles.identity}>
-        <Avatar name={contact.name} size={56} backgroundColor="#FFFFFF" textColor={colors.textPrimary} />
+        <Avatar name={contact.name} size={72} />
         <View style={styles.identityTexts}>
           <AppText variant="screenTitle" color={colors.headerText} align="center" style={styles.name}>
             {contact.name}

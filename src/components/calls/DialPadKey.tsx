@@ -17,7 +17,7 @@ export function DialPadKey({
   letters,
   onPress,
   onLongPress,
-  size = 76,
+  size = 72,
 }: DialPadKeyProps) {
   return (
     <PressableScale
@@ -25,12 +25,12 @@ export function DialPadKey({
       accessibilityLabel={letters ? `${digit}, ${letters}` : digit}
       onPress={() => onPress(digit)}
       onLongPress={onLongPress ? () => onLongPress(digit) : undefined}
-      scaleTo={0.86}
+      scaleTo={0.94}
       style={[styles.key, { width: size, height: size, borderRadius: size / 2 }]}
     >
       <AppText style={styles.digit}>{digit}</AppText>
       {letters ? (
-        <AppText style={styles.letters} color={colors.textSecondary}>
+        <AppText style={styles.letters} color={colors.black}>
           {letters}
         </AppText>
       ) : null}
@@ -40,20 +40,20 @@ export function DialPadKey({
 
 const styles = StyleSheet.create({
   key: {
-    backgroundColor: colors.surface,
+    backgroundColor: colors.lightGrey,
     alignItems: 'center',
     justifyContent: 'center',
   },
   digit: {
-    fontFamily: fontFamily.medium,
+    fontFamily: fontFamily.semibold,
     fontSize: 28,
     lineHeight: 34,
     color: colors.textPrimary,
   },
   letters: {
-    fontFamily: fontFamily.medium,
-    fontSize: 10,
+    fontFamily: fontFamily.bold,
+    fontSize: 9.5,
     lineHeight: 12,
-    letterSpacing: 1.5,
+    letterSpacing: 1.2,
   },
 });

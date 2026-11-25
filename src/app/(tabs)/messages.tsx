@@ -11,25 +11,21 @@ import { LoadingState } from '../../components/ui/LoadingState';
 import { SegmentedTabs } from '../../components/ui/SegmentedTabs';
 import { listEnter } from '../../components/ui/motion';
 import { useContacts } from '../../hooks/useContacts';
-import { useAuthStore } from '../../store/authStore';
 import { useMessageStore } from '../../store/messageStore';
 import { spacing } from '../../theme';
 
-type MessagesTab = 'all' | 'unread' | 'candidates' | 'clients';
+type MessagesTab = 'all' | 'whatsapp' | 'sms';
 
 const TABS = [
   { key: 'all' as const, label: 'All' },
-  { key: 'unread' as const, label: 'Unread' },
-  { key: 'candidates' as const, label: 'Candidates' },
-  { key: 'clients' as const, label: 'Clients' },
+  { key: 'whatsapp' as const, label: 'WhatsApp' },
+  { key: 'sms' as const, label: 'SMS' },
 ];
 
 export default function MessagesScreen() {
   const router = useRouter();
   const [tab, setTab] = useState<MessagesTab>('all');
-  const [search, setSearch] = useState('');
-
-  const businessNumber = useAuthStore((s) => s.user?.businessNumber);
+  const search = '';
   const { status, conversations, conversationContacts, load } = useMessageStore();
   const { data: contacts, isLoading: contactsLoading, isError, refetch } = useContacts();
 
@@ -49,11 +45,7 @@ export default function MessagesScreen() {
     let list = [...conversations].sort((a, b) =>
       b.lastMessageAt.localeCompare(a.lastMessageAt),
     );
-    if (tab === 'unread') list = list.filter((c) => c.unreadCount > 0);
-    if (tab === 'candidates' || tab === 'clients') {
-      const category = tab === 'candidates' ? 'candidate' : 'client';
-      list = list.filter((c) => contactById.get(c.contactId)?.category === category);
-    }
+    if (tab !== 'all') list = list.filter((c) => c.channel === tab);
     const q = search.trim().toLowerCase();
     if (!q) return list;
     return list.filter((c) => {
@@ -71,16 +63,7 @@ export default function MessagesScreen() {
   const isLoading = status === 'loading' || status === 'idle' || contactsLoading;
   const hasError = status === 'error' || isError;
 
-  const header = (
-    <ScreenHeader
-      title="Messages"
-      subtitle={`WhatsApp and SMS · ${businessNumber ?? ''}`}
-      showSearch
-      searchPlaceholder="Search messages"
-      searchValue={search}
-      onSearchChange={setSearch}
-    />
-  );
+  const header = <ScreenHeader title="Messages" />;
 
   return (
     <ScreenContainer header={header} padded={false}>
@@ -102,7 +85,9 @@ export default function MessagesScreen() {
           showsVerticalScrollIndicator={false}
           ListEmptyComponent={
             <EmptyState
-              title={tab === 'unread' ? 'Nothing unread' : 'No conversations'}
+              title={
+                tab === 'whatsapp' ? 'No WhatsApp messages' : tab === 'sms' ? 'No SMS messages' : 'No conversations'
+              }
               description={
                 search
                   ? 'No conversations match your search.'
@@ -129,12 +114,11 @@ export default function MessagesScreen() {
 
 const styles = StyleSheet.create({
   tabs: {
-    paddingHorizontal: spacing.lg,
-    marginTop: spacing.lg,
+    paddingHorizontal: 20,
+    paddingBottom: spacing.sm,
   },
   listContent: {
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.lg,
-    paddingBottom: spacing.xxxl,
+    paddingTop: spacing.xs,
+    paddingBottom: spacing.xl,
   },
 });

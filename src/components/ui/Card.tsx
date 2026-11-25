@@ -1,6 +1,6 @@
 import React from 'react';
 import { StyleProp, StyleSheet, View, ViewStyle } from 'react-native';
-import { colors, radius, spacing } from '../../theme';
+import { colors, spacing } from '../../theme';
 import { PressableScale } from './motion';
 
 interface CardProps {
@@ -32,7 +32,7 @@ export function Card({
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
       onPress={onPress}
-      scaleTo={0.98}
+      scaleTo={0.99}
       style={base}
     >
       {children}
@@ -43,7 +43,9 @@ export function Card({
 const styles = StyleSheet.create({
   card: {
     backgroundColor: colors.surface,
-    borderRadius: radius.lg,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: colors.line,
   },
   padded: {
     padding: spacing.lg,

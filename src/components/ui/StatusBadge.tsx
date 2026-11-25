@@ -1,6 +1,6 @@
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
-import { colors, radius, spacing } from '../../theme';
+import { colors, fontFamily, radius, spacing } from '../../theme';
 import { AppText } from './AppText';
 import { PulsingDot } from './motion';
 
@@ -15,12 +15,13 @@ interface StatusBadgeProps {
   pulse?: boolean;
 }
 
-const dotColors: Record<StatusTone, string> = {
-  success: colors.success,
-  warning: colors.warning,
-  error: colors.error,
-  info: colors.secondary,
-  neutral: colors.textMuted,
+/** UI kit chip palette: dot colour, tinted background, readable text. */
+const tones: Record<StatusTone, { dot: string; bg: string; text: string }> = {
+  success: { dot: colors.mint, bg: colors.mintTint, text: colors.mintText },
+  warning: { dot: colors.amber, bg: colors.amberTint, text: colors.amberText },
+  error: { dot: colors.red, bg: colors.redTint, text: colors.redText },
+  info: { dot: colors.aiBlue, bg: colors.aiBlueTint, text: colors.aiBlueText },
+  neutral: { dot: colors.black, bg: colors.lightGrey, text: colors.black },
 };
 
 export function StatusBadge({
@@ -29,14 +30,19 @@ export function StatusBadge({
   variant = 'pill',
   pulse = false,
 }: StatusBadgeProps) {
+  const t = tones[tone];
   return (
-    <View style={[styles.base, variant === 'pill' && styles.pill]}>
+    <View style={[styles.base, variant === 'pill' && [styles.pill, { backgroundColor: t.bg }]]}>
       {pulse ? (
-        <PulsingDot color={dotColors[tone]} size={7} />
+        <PulsingDot color={t.dot} size={7} />
       ) : (
-        <View style={[styles.dot, { backgroundColor: dotColors[tone] }]} />
+        <View style={[styles.dot, { backgroundColor: t.dot }]} />
       )}
-      <AppText variant="caption" color={colors.textPrimary} numberOfLines={1}>
+      <AppText
+        style={styles.label}
+        color={variant === 'pill' ? t.text : colors.black}
+        numberOfLines={1}
+      >
         {label}
       </AppText>
     </View>
@@ -51,12 +57,15 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   pill: {
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
     borderRadius: radius.pill,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 5,
+    paddingLeft: spacing.sm,
+    paddingRight: 10,
+    paddingVertical: 4,
+  },
+  label: {
+    fontFamily: fontFamily.bold,
+    fontSize: 12,
+    lineHeight: 16,
   },
   dot: {
     width: 7,

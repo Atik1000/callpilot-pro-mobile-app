@@ -1,7 +1,7 @@
 import { useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
-import Animated, { SlideOutRight } from 'react-native-reanimated';
+import { StyleSheet } from 'react-native';
+import Animated from 'react-native-reanimated';
 import { AlertCard } from '../../components/alerts/AlertCard';
 import { ScreenContainer } from '../../components/layout/ScreenContainer';
 import { ScreenHeader } from '../../components/layout/ScreenHeader';
@@ -9,34 +9,41 @@ import { ConfirmationModal } from '../../components/ui/ConfirmationModal';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { ErrorState } from '../../components/ui/ErrorState';
 import { LoadingState } from '../../components/ui/LoadingState';
-import { SegmentedTabs } from '../../components/ui/SegmentedTabs';
-import { listEnter, listLayout } from '../../components/ui/motion';
+import { AppText } from '../../components/ui/AppText';
+import { listLayout } from '../../components/ui/motion';
 import { useAlertStore } from '../../store/alertStore';
 import { spacing } from '../../theme';
 import { AppAlert } from '../../types';
 
-type AlertsTab = 'all' | 'unread';
-
-const TABS = [
-  { key: 'all' as const, label: 'All alerts' },
-  { key: 'unread' as const, label: 'Unread' },
-];
+type AlertRow =
+  | { kind: 'header'; key: string; label: string }
+  | { kind: 'alert'; key: string; alert: AppAlert };
 
 export default function AlertsScreen() {
   const router = useRouter();
   const { status, alerts, load, actionAlert, dismissAlert, markAlertRead } =
     useAlertStore();
   const [confirmingAlert, setConfirmingAlert] = useState<AppAlert | null>(null);
-  const [tab, setTab] = useState<AlertsTab>('all');
 
   useEffect(() => {
     void load();
   }, [load]);
 
-  const filtered = useMemo(
-    () => (tab === 'unread' ? alerts.filter((a) => !a.isRead) : alerts),
-    [alerts, tab],
-  );
+  // UI kit layout: NEW (unread) first, then EARLIER.
+  const rows = useMemo<AlertRow[]>(() => {
+    const fresh = alerts.filter((a) => !a.isRead);
+    const earlier = alerts.filter((a) => a.isRead);
+    const out: AlertRow[] = [];
+    if (fresh.length) {
+      out.push({ kind: 'header', key: 'h-new', label: 'New' });
+      fresh.forEach((a) => out.push({ kind: 'alert', key: a.id, alert: a }));
+    }
+    if (earlier.length) {
+      out.push({ kind: 'header', key: 'h-earlier', label: 'Earlier' });
+      earlier.forEach((a) => out.push({ kind: 'alert', key: a.id, alert: a }));
+    }
+    return out;
+  }, [alerts]);
 
   const openRelated = (alert: AppAlert) => {
     if (alert.relatedConversationId) {
@@ -46,44 +53,42 @@ export default function AlertsScreen() {
     }
   };
 
-  const header = <ScreenHeader title="Alerts" subtitle="Today" />;
+  const header = <ScreenHeader title="Alerts" />;
 
   return (
     <ScreenContainer header={header} padded={false}>
-      <View style={styles.tabs}>
-        <SegmentedTabs tabs={TABS} selected={tab} onSelect={setTab} />
-      </View>
       {status === 'loading' || status === 'idle' ? (
         <LoadingState label="Loading alerts…" />
       ) : status === 'error' ? (
         <ErrorState description="Could not load alerts." onRetry={() => void load()} />
       ) : (
         <Animated.FlatList
-          data={filtered}
-          keyExtractor={(a) => a.id}
+          data={rows}
+          keyExtractor={(row) => row.key}
           itemLayoutAnimation={listLayout}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
           ListEmptyComponent={
             <EmptyState
-              title={tab === 'unread' ? 'Nothing unread' : 'All caught up'}
+              title="All caught up"
               description="New alerts and AI suggestions will appear here."
             />
           }
-          renderItem={({ item, index }) => (
-            <Animated.View
-              entering={listEnter(index)}
-              exiting={SlideOutRight.duration(220)}
-            >
+          renderItem={({ item: row }) =>
+            row.kind === 'header' ? (
+              <AppText variant="sectionTitle" style={styles.sectionLabel}>
+                {row.label}
+              </AppText>
+            ) : (
               <AlertCard
-                alert={item}
-                onPress={() => openRelated(item)}
-                onSend={() => setConfirmingAlert(item)}
-                onDismiss={() => dismissAlert(item.id)}
-                onMarkRead={() => markAlertRead(item.id)}
+                alert={row.alert}
+                onPress={() => openRelated(row.alert)}
+                onSend={() => setConfirmingAlert(row.alert)}
+                onDismiss={() => dismissAlert(row.alert.id)}
+                onMarkRead={() => markAlertRead(row.alert.id)}
               />
-            </Animated.View>
-          )}
+            )
+          }
         />
       )}
 
@@ -108,13 +113,12 @@ export default function AlertsScreen() {
 }
 
 const styles = StyleSheet.create({
-  tabs: {
-    paddingHorizontal: spacing.lg,
-    marginTop: spacing.lg,
-  },
   listContent: {
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.lg,
-    paddingBottom: spacing.xxxl,
+    paddingHorizontal: 20,
+    paddingBottom: spacing.xl,
+  },
+  sectionLabel: {
+    paddingTop: 12,
+    paddingBottom: 10,
   },
 });
