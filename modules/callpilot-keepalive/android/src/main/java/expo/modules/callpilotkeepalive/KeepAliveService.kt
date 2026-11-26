@@ -10,145 +10,142 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
-import android.os.PowerManager
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 
-/**
- * Foreground service that keeps the app process (and its Telnyx WebSocket)
- * alive while the app is minimised or swiped away, so incoming calls still
- * reach the phone. Shows a quiet, persistent "ready for calls" notification.
- */
+/** Foreground execution exists only around a real call, never for idle SIP registration. */
 class KeepAliveService : Service() {
-  private var wakeLock: PowerManager.WakeLock? = null
-
   override fun onBind(intent: Intent?): IBinder? = null
 
   override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-    val title = intent?.getStringExtra(EXTRA_TITLE) ?: "CallPilot"
-    val body = intent?.getStringExtra(EXTRA_BODY) ?: "Ready for calls on your business line"
-    Notifications.ensureChannels(this)
-
-    val notification = NotificationCompat.Builder(this, Notifications.CHANNEL_SERVICE)
-      .setContentTitle(title)
-      .setContentText(body)
-      .setSmallIcon(applicationInfo.icon)
-      .setOngoing(true)
-      .setSilent(true)
-      .setShowWhen(false)
-      .setCategory(NotificationCompat.CATEGORY_SERVICE)
-      .setPriority(NotificationCompat.PRIORITY_LOW)
-      .setContentIntent(Notifications.openAppIntent(this, null))
-      .build()
-
-    ServiceCompat.startForeground(
-      this,
-      Notifications.ID_SERVICE,
-      notification,
-      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-        ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
-      } else {
-        0
-      },
-    )
-
-    if (wakeLock == null) {
-      // Partial lock: keeps the CPU servicing the signalling socket; screen stays off.
-      wakeLock = (getSystemService(Context.POWER_SERVICE) as PowerManager)
-        .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "CallPilot::KeepAlive")
-        .apply { setReferenceCounted(false); acquire() }
-    }
-
-    // Started by Android (sticky restart), a reboot or an app update rather
-    // than by the running app: boot the JS line task so the phone registers.
-    if (intent?.getBooleanExtra(EXTRA_FROM_APP, false) != true) {
-      try {
-        com.facebook.react.HeadlessJsTaskService.acquireWakeLockNow(this)
-        startService(Intent(this, LineTaskService::class.java))
-      } catch (_: Exception) {}
-    }
-    return START_STICKY
+    // Do not restart a socket or a finished call after process death/boot.
+    if (intent == null) { stopSelf(); return START_NOT_STICKY }
+    val id = intent.getStringExtra(NativeCalls.EXTRA_CALL_UUID)
+    if (id == null) NativeCalls.legacyCallActive = true
+    val pending = NativeCallStore.pending(this)?.takeIf { it.callUuid == id && it.action != "decline" }
+    if (id != null && pending == null) { stopSelf(); return START_NOT_STICKY }
+    val notification = if (pending != null) Notifications.nativeCall(this, pending, pending.active)
+      else Notifications.legacyActiveCall(this, intent.getStringExtra(EXTRA_TITLE) ?: "CallPilot",
+        intent.getStringExtra(EXTRA_BODY) ?: "Call in progress")
+    try {
+      ServiceCompat.startForeground(this, Notifications.ID_INCOMING, notification,
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) ServiceInfo.FOREGROUND_SERVICE_TYPE_PHONE_CALL else 0)
+    } catch (_: Exception) { stopSelf() }
+    return START_NOT_STICKY
   }
 
   override fun onDestroy() {
-    Ringer.stop()
-    wakeLock?.let { if (it.isHeld) it.release() }
-    wakeLock = null
+    NativeCalls.legacyCallActive = false
     super.onDestroy()
   }
 
   companion object {
     const val EXTRA_TITLE = "title"
     const val EXTRA_BODY = "body"
-    const val EXTRA_FROM_APP = "fromApp"
   }
 }
 
-/** Notification channels, intents and the incoming-call alert. */
+/** Native call notifications are shown before JS/auth/network initialization. */
 object Notifications {
-  const val CHANNEL_SERVICE = "callpilot_service"
-  const val CHANNEL_INCOMING = "callpilot_incoming_call"
-  const val ID_SERVICE = 4101
+  // New channel avoids retaining the old silent-only incoming channel settings.
+  const val CHANNEL_INCOMING = "callpilot-native-incoming-v2"
+  const val CHANNEL_ACTIVE = "callpilot-active-calls-v2"
   const val ID_INCOMING = 4102
 
   fun ensureChannels(context: Context) {
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
     val manager = context.getSystemService(NotificationManager::class.java)
-    manager.createNotificationChannel(
-      NotificationChannel(CHANNEL_SERVICE, "Phone line status", NotificationManager.IMPORTANCE_LOW).apply {
-        description = "Keeps your business line ready for incoming calls"
-        setShowBadge(false)
-      },
-    )
-    manager.createNotificationChannel(
-      NotificationChannel(CHANNEL_INCOMING, "Incoming calls", NotificationManager.IMPORTANCE_HIGH).apply {
-        description = "Incoming calls on your business line"
-        // The app plays the ringtone itself (InCallManager), so the alert is silent.
-        setSound(null, null)
-        enableVibration(false)
-        lockscreenVisibility = Notification.VISIBILITY_PUBLIC
-      },
-    )
+    manager.createNotificationChannel(NotificationChannel(CHANNEL_INCOMING, "Incoming calls", NotificationManager.IMPORTANCE_HIGH).apply {
+      description = "Incoming business calls"
+      setSound(null, null) // Bounded native ringer respects the system volume/silent mode.
+      enableVibration(false)
+      lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+    })
+    manager.createNotificationChannel(NotificationChannel(CHANNEL_ACTIVE, "Active calls", NotificationManager.IMPORTANCE_LOW).apply {
+      description = "Calls currently in progress"
+      setShowBadge(false)
+      setSound(null, null)
+    })
   }
 
-  /** Opens the app, optionally at a deep link (e.g. callpilot://incoming-call). */
   fun openAppIntent(context: Context, deepLink: String?): PendingIntent {
-    val launch = context.packageManager.getLaunchIntentForPackage(context.packageName)
-      ?: Intent().setPackage(context.packageName)
+    val launch = context.packageManager.getLaunchIntentForPackage(context.packageName) ?: Intent().setPackage(context.packageName)
     launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-    if (deepLink != null) {
-      launch.action = Intent.ACTION_VIEW
-      launch.data = android.net.Uri.parse(deepLink)
-    }
-    return PendingIntent.getActivity(
-      context,
-      if (deepLink != null) 1 else 0,
-      launch,
-      PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-    )
+    if (deepLink != null) { launch.action = Intent.ACTION_VIEW; launch.data = android.net.Uri.parse(deepLink) }
+    return PendingIntent.getActivity(context, if (deepLink != null) 1 else 0, launch,
+      PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
   }
 
-  /** Heads-up / full-screen alert so a call ringing in the background is visible. */
-  fun showIncomingCall(context: Context, caller: String, detail: String) {
+  fun incomingActivity(context: Context, invitation: NativeInvitation, answer: Boolean = false): PendingIntent {
+    val intent = Intent(context, IncomingCallActivity::class.java)
+      .setAction(if (answer) NativeCalls.ACTION_ANSWER else Intent.ACTION_VIEW)
+      .setData(android.net.Uri.parse("callpilot-native://call/${invitation.callUuid}/${if (answer) "answer" else "open"}"))
+      .putExtra(NativeCalls.EXTRA_CALL_UUID, invitation.callUuid)
+      .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+    return PendingIntent.getActivity(context, if (answer) 2 else 1, intent,
+      PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+  }
+
+  private fun declineIntent(context: Context, invitation: NativeInvitation): PendingIntent {
+    val intent = Intent(context, CallPilotActionReceiver::class.java).setAction(NativeCalls.ACTION_DECLINE)
+      .setData(android.net.Uri.parse("callpilot-native://call/${invitation.callUuid}/decline"))
+      .putExtra(NativeCalls.EXTRA_CALL_UUID, invitation.callUuid)
+    return PendingIntent.getBroadcast(context, 3, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+  }
+
+  fun nativeCall(context: Context, invitation: NativeInvitation, active: Boolean): Notification {
     ensureChannels(context)
-    val open = openAppIntent(context, "callpilot://incoming-call")
-    val notification = NotificationCompat.Builder(context, CHANNEL_INCOMING)
-      .setContentTitle(caller)
-      .setContentText(detail)
+    val open = if (active) openAppIntent(context, "callpilot://active-call") else incomingActivity(context, invitation)
+    val builder = NotificationCompat.Builder(context, if (active) CHANNEL_ACTIVE else CHANNEL_INCOMING)
+      .setContentTitle("CallPilot")
+      .setContentText(if (active) "Business call in progress" else if (invitation.action == "answer") "Connecting business call…" else "Incoming business call")
       .setSmallIcon(context.applicationInfo.icon)
       .setCategory(NotificationCompat.CATEGORY_CALL)
-      .setPriority(NotificationCompat.PRIORITY_MAX)
+      .setPriority(if (active) NotificationCompat.PRIORITY_LOW else NotificationCompat.PRIORITY_MAX)
       .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
       .setOngoing(true)
-      .setAutoCancel(true)
+      .setAutoCancel(false)
+      .setOnlyAlertOnce(true)
       .setContentIntent(open)
-      .setFullScreenIntent(open, true)
-      .addAction(0, "Open to answer", open)
-      .build()
-    context.getSystemService(NotificationManager::class.java).notify(ID_INCOMING, notification)
+    if (!active) {
+      builder.setTimeoutAfter(maxOf(1, invitation.expiresMillis() - System.currentTimeMillis()))
+      if (invitation.action == "open") {
+        if (Build.VERSION.SDK_INT < 34 || context.getSystemService(NotificationManager::class.java).canUseFullScreenIntent()) {
+          builder.setFullScreenIntent(open, true)
+        }
+        val person = androidx.core.app.Person.Builder().setName("CallPilot").setImportant(true).build()
+        builder.setStyle(NotificationCompat.CallStyle.forIncomingCall(person, declineIntent(context, invitation), incomingActivity(context, invitation, true)))
+      }
+    } else {
+      val person = androidx.core.app.Person.Builder().setName("CallPilot").setImportant(true).build()
+      builder.setStyle(NotificationCompat.CallStyle.forOngoingCall(person, declineIntent(context, invitation)))
+    }
+    return builder.build()
   }
 
-  fun clearIncomingCall(context: Context) {
-    context.getSystemService(NotificationManager::class.java).cancel(ID_INCOMING)
+  fun showNativeCall(context: Context, invitation: NativeInvitation, active: Boolean) {
+    runCatching { context.getSystemService(NotificationManager::class.java).notify(ID_INCOMING, nativeCall(context, invitation, active)) }
   }
+
+  fun legacyActiveCall(context: Context, title: String, body: String): Notification {
+    ensureChannels(context)
+    return NotificationCompat.Builder(context, CHANNEL_ACTIVE).setContentTitle(title).setContentText(body)
+      .setSmallIcon(context.applicationInfo.icon).setOngoing(true).setSilent(true)
+      .setCategory(NotificationCompat.CATEGORY_CALL).setContentIntent(openAppIntent(context, "callpilot://active-call")).build()
+  }
+
+  /** Compatibility for existing in-process SDK call presentation. */
+  fun showIncomingCall(context: Context, caller: String, detail: String) {
+    val pending = NativeCallStore.pending(context)
+    if (pending != null) { if (!pending.active) showNativeCall(context, pending, false); return }
+    ensureChannels(context)
+    val open = openAppIntent(context, "callpilot://incoming-call")
+    val builder = NotificationCompat.Builder(context, CHANNEL_INCOMING).setContentTitle(caller).setContentText(detail)
+      .setSmallIcon(context.applicationInfo.icon).setCategory(NotificationCompat.CATEGORY_CALL)
+      .setPriority(NotificationCompat.PRIORITY_MAX).setOngoing(true).setContentIntent(open).setTimeoutAfter(60_000)
+    if (Build.VERSION.SDK_INT < 34 || context.getSystemService(NotificationManager::class.java).canUseFullScreenIntent()) builder.setFullScreenIntent(open, true)
+    context.getSystemService(NotificationManager::class.java).notify(ID_INCOMING, builder.build())
+  }
+
+  fun clearIncomingCall(context: Context) { context.getSystemService(NotificationManager::class.java).cancel(ID_INCOMING) }
 }

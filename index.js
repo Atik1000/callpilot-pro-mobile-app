@@ -1,8 +1,8 @@
-// App entry: expo-router, plus the Android background task that keeps the
-// business line registered when the app screen is closed.
+// Native FCM presents incoming calls before React exists. Only a notification
+// Decline needs a bounded headless authenticated action; no idle SIP keep-alive.
 import { AppRegistry } from 'react-native';
 import 'expo-router/entry';
 
-AppRegistry.registerHeadlessTask('CallPilotLineTask', () =>
-  require('./src/services/lineTask').default,
+AppRegistry.registerHeadlessTask('CallPilotPushAction', () =>
+  require('./src/services/mobileCallService').headlessPushAction,
 );

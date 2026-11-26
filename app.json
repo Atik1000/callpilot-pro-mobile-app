@@ -43,6 +43,8 @@
         }
       ],
       "expo-secure-store",
+      "expo-notifications",
+      "./plugins/with-callpilot-native-push.js",
       [
         "@config-plugins/react-native-webrtc",
         {

@@ -1,4 +1,4 @@
-import { Alert, AppState } from 'react-native';
+import { Alert, AppState, Platform } from 'react-native';
 import { keepAlive } from '../../modules/callpilot-keepalive/src';
 import { create } from 'zustand';
 import {
@@ -19,6 +19,8 @@ import {
   voipSupported,
 } from '../services/voipService';
 import { webVoipService } from '../services/webVoipService';
+import { mobileCallService } from '../services/mobileCallService';
+import { notificationService } from '../services/notificationService';
 
 import { formatPhone } from '../utils/formatPhone';
 
@@ -35,6 +37,7 @@ interface StartCallInput {
 interface IncomingCallState {
   phoneNumber: string;
   displayName: string;
+  callUuid?: string;
 }
 
 interface CallState {
@@ -54,6 +57,9 @@ interface CallState {
   /** True when the active call runs over Telnyx (not simulated). */
   isLiveCall: boolean;
   incomingCall: IncomingCallState | null;
+  activeMobileCallUuid: string | null;
+  pushReady: boolean;
+  pushDetail?: string;
 
   isMuted: boolean;
   isOnHold: boolean;
@@ -106,29 +112,8 @@ function buildActiveCall(
   };
 }
 
-/**
- * Phones like Vivo/Xiaomi kill background apps despite the foreground
- * service unless CallPilot is exempt from battery optimisation. Ask once
- * per launch, only when needed.
- */
-let batteryPromptShown = false;
+/** One signaling client per signed-in UI session; FCM owns cold receiving. */
 let voipInitialised = false;
-
-function askBatteryExemptionOnce() {
-  if (batteryPromptShown || !keepAlive.available) return;
-  if (keepAlive.isIgnoringBatteryOptimizations()) return;
-  batteryPromptShown = true;
-  setTimeout(() => {
-    Alert.alert(
-      'Keep calls coming in',
-      'Allow CallPilot to run in the background so calls still ring when the app is minimised.',
-      [
-        { text: 'Not now', style: 'cancel' },
-        { text: 'Allow', onPress: () => keepAlive.requestIgnoreBatteryOptimizations() },
-      ],
-    );
-  }, 1500);
-}
 
 export const useCallStore = create<CallState>((set, get) => {
   /** Appends the finished call to local history and clears call state. */
@@ -159,12 +144,17 @@ export const useCallStore = create<CallState>((set, get) => {
       isMuted: false,
       isOnHold: false,
       isSpeakerOn: false,
+      activeMobileCallUuid: null,
     });
+    mobileCallService.finished();
   };
 
   const voipListener = {
-    onStatus: (status: VoipStatus, detail?: string) =>
-      set({ voipStatus: status, voipDetail: detail }),
+    onStatus: (status: VoipStatus, detail?: string) => {
+      const push = notificationService.getRemotePushStatus();
+      set({ voipStatus: status, voipDetail: status === 'online' && Platform.OS === 'android' && !usesWebVoipEngine && !push.ready
+        ? `Outgoing calls ready. ${push.detail || 'Closed-app call notifications are not registered yet.'}` : detail });
+    },
 
     onIncoming: (info: IncomingCallInfo) => {
       // Use the ATS contact name when the caller is already known.
@@ -184,21 +174,25 @@ export const useCallStore = create<CallState>((set, get) => {
     },
 
     onCallPhase: (phase: VoipCallPhase) => {
-      if (phase !== 'ringing') keepAlive.clearIncomingCall();
+      // Native mobile invitations own their foreground call notification.
+      // In particular, connecting/hold must not dismiss an established call.
+      if (phase !== 'ringing' && !get().activeMobileCallUuid) keepAlive.clearIncomingCall();
       if (phase === 'ended') {
         const { activeCall, incomingCall } = get();
         if (incomingCall) {
           // Caller hung up before we answered.
           set({ incomingCall: null });
+          mobileCallService.finished();
           return;
         }
-        if (activeCall) finalizeCall();
+        if (activeCall) finalizeCall(get().activeMobileCallUuid ? 'incoming' : 'outgoing');
         return;
       }
       const prevPhase = get().callPhase;
       set({ callPhase: phase, isOnHold: phase === 'held' });
       // Restart the timer the moment the call first connects (not on unhold).
       if (phase === 'active' && prevPhase !== 'active' && prevPhase !== 'held') {
+        if (get().activeMobileCallUuid) mobileCallService.markMediaActive();
         const { activeCall } = get();
         if (activeCall) {
           set({ activeCall: { ...activeCall, startedAt: Date.now() } });
@@ -220,6 +214,8 @@ export const useCallStore = create<CallState>((set, get) => {
     callPhase: null,
     isLiveCall: false,
     incomingCall: null,
+    activeMobileCallUuid: null,
+    pushReady: false,
 
     isMuted: false,
     isOnHold: false,
@@ -262,19 +258,44 @@ export const useCallStore = create<CallState>((set, get) => {
     },
 
     initVoip: () => {
-      // Keep the line alive while the app is minimised or closed (Android).
-      keepAlive.start('CallPilot', 'Ready for calls on your business line');
-      if (AppState.currentState === 'active') askBatteryExemptionOnce();
       // Already registered (e.g. started in the background, then the app was
       // opened): don't reconnect, it would drop a call that is ringing.
       if (voipInitialised) return;
       voipInitialised = true;
       voipService.setListener(voipListener);
       void voipService.connect();
+      if (Platform.OS === 'android' && !usesWebVoipEngine) {
+        const startPush = () => mobileCallService.start({
+          onInvitation: (call) => {
+            if (get().activeCall) return;
+            set({ incomingCall: { phoneNumber: call.caller.number,
+              displayName: call.caller.name || formatPhone(call.caller.number), callUuid: call.call_uuid } });
+          },
+          onDismiss: (uid) => {
+            if (get().incomingCall?.callUuid === uid) set({ incomingCall: null });
+            if (get().activeMobileCallUuid === uid) {
+              voipService.hangup();
+              finalizeCall('incoming');
+            }
+          },
+          onAnswerRequested: () => get().answerIncoming(),
+          onEndRequested: () => { voipService.hangup(); finalizeCall('incoming'); },
+          onError: (message) => Alert.alert('Incoming call', message),
+        });
+        startPush();
+        void notificationService.registerRemotePush().then((status) => {
+          if (!voipInitialised) return;
+          set({ pushReady: status.ready, pushDetail: status.detail });
+          if (status.ready) startPush();
+          else set({ voipDetail: status.detail || 'Closed-app calls need push registration.' });
+        });
+      }
     },
 
     shutdownVoip: () => {
       voipInitialised = false;
+      mobileCallService.stop();
+      notificationService.stopRemotePush();
       keepAlive.stop();
       void voipService.disconnect();
       voipService.setListener(null);
@@ -286,6 +307,8 @@ export const useCallStore = create<CallState>((set, get) => {
         isMuted: false,
         isOnHold: false,
         isSpeakerOn: false,
+        activeMobileCallUuid: null,
+        pushReady: false,
       });
     },
 
@@ -328,7 +351,7 @@ export const useCallStore = create<CallState>((set, get) => {
     answerIncoming: async () => {
       const incoming = get().incomingCall;
       if (!incoming) return;
-      keepAlive.clearIncomingCall();
+      if (!incoming.callUuid) keepAlive.clearIncomingCall();
       const contact = Object.values(get().callContacts).find(
         (c) => c.name === incoming.displayName,
       );
@@ -341,24 +364,32 @@ export const useCallStore = create<CallState>((set, get) => {
         isOnHold: false,
         isSpeakerOn: false,
         callNotes: [],
+        activeMobileCallUuid: incoming.callUuid || null,
       });
       try {
-        await voipService.answer();
+        if (incoming.callUuid) {
+          const invitation = await mobileCallService.prepareAnswer(incoming.callUuid);
+          await nativeVoipService.answerMobileInvitation(invitation);
+        } else await voipService.answer();
       } catch (error) {
-        set({ activeCall: null, callPhase: null, isLiveCall: false });
+        void mobileCallService.declineOrEnd().catch(() => undefined);
+        set({ activeCall: null, callPhase: null, isLiveCall: false, activeMobileCallUuid: null });
         throw error;
       }
     },
 
     declineIncoming: () => {
+      if (get().incomingCall?.callUuid) void mobileCallService.declineOrEnd().catch(() => undefined);
       keepAlive.clearIncomingCall();
       voipService.decline();
       set({ incomingCall: null });
     },
 
     endCall: () => {
+      const incoming = Boolean(get().activeMobileCallUuid);
+      if (incoming) void mobileCallService.declineOrEnd().catch(() => undefined);
       if (get().isLiveCall) voipService.hangup();
-      finalizeCall();
+      finalizeCall(incoming ? 'incoming' : 'outgoing');
     },
 
     toggleMute: () => {
