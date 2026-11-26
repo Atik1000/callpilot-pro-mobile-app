@@ -17,6 +17,8 @@ android {
 dependencies {
   implementation 'androidx.core:core-ktx:1.13.1'
   implementation 'com.facebook.react:react-android'
-  // Same version expo-notifications ships, so Gradle resolves a single copy.
+  implementation project(':expo-notifications')
+  // Matches Expo SDK 58's notifications transport.
   implementation 'com.google.firebase:firebase-messaging:25.0.1'
+  testImplementation 'junit:junit:4.13.2'
 }

@@ -30,23 +30,37 @@ the app POSTs `/voice/api/token/` for a login token, registers with
 header. Incoming calls ring in-app while it is open; mute, hold, DTMF,
 speaker and transfer (`/voice/api/transfer/`) are wired to the live call.
 
-Because this relies on native WebRTC modules, **calling needs a development
-build — Expo Go and web fall back to simulated calls**:
+Native calling needs an installed native build. Expo Go and web use the existing
+browser-SDK bridge for foreground calling; closed-app Android receiving requires
+the native build:
 
 ```bash
 npx expo run:ios                        # local build
 npx expo run:android
-npx eas-cli@latest build --profile development   # or cloud build
+npx eas-cli@latest build --platform android --profile preview # cloud APK build
 ```
 
-The keypad header shows the live phone status (`Phone online` /
-`Connecting…` / `Simulated calls`). Everything else (messages/SMS, contacts,
+The keypad header shows the live phone status. Everything else (messages/SMS, contacts,
 call history, voicemails, alerts) works over plain HTTPS in any environment.
 
 ### Sign-in
 
 - **Live mode (default):** a real CallPilot account (same login as the dashboard). The OTP step appears only when the account has two-step enabled. Tokens are kept in `expo-secure-store` and refreshed automatically.
 - **Mock mode** (`EXPO_PUBLIC_SERVICE_MODE=mock`): any email + any password, OTP `123456`.
+
+### Android calls after Clear all
+
+Android now receives incoming calls through native high-priority FCM invitations,
+with Telecom/native call UI before React starts. It no longer starts a permanent
+idle keep-alive service or automatically asks to keep the app running all day.
+Actual calls still use foreground call-lifecycle support for audio.
+
+Add the Firebase Android client file for **`pro.callpilot.app`**, rebuild/install
+the native APK, and sign out/sign in once with emailed OTP to register this phone.
+The app's **Settings → Calls → Incoming calls while closed** shows registration
+readiness. Existing outgoing calling keeps its per-call authorization.
+
+See [step-by-step setup, rebuild and Redmi tests](docs/android-incoming-calls.md).
 
 ## Project structure
 
@@ -138,20 +152,21 @@ Conversations are messages grouped by contact + channel; conversation ids encode
 
 ## Notifications & live sync
 
-While signed in, the app polls the API every 25 seconds (and immediately on
-returning to the foreground), so Calls and Messages stay fresh without a
-manual refresh. When the app is **backgrounded**, new inbound WhatsApp/SMS
-messages and missed calls raise **local notifications**
-(`src/services/notificationService.ts` + `src/hooks/useLiveSync.ts`);
+While signed in and able to execute JavaScript, the app polls the API every 25
+seconds (and immediately on returning to the foreground), so Calls and Messages
+stay fresh without a manual refresh. The live-sync hook can raise local
+notifications for newly discovered messages and missed calls;
 tapping one opens the matching chat or the Calls tab (including from a cold
-start — the tap is replayed after the session restores).
+start — the tap is replayed after the session restores). Closed-app Android
+incoming calls use the native FCM receiver rather than that polling hook.
 
-Limits: local notifications work in Expo Go, but when the app is **fully
-closed** only a remote push can wake it — that needs a development build
-(Expo Go dropped remote push on Android in SDK 53) **and** backend push
-support (device token registration + a sender), which `devapi.callpilot.pro`
-does not expose yet. iOS also suspends JS timers shortly after backgrounding,
-so background polling is best-effort until real push lands.
+Limits: local notifications work in Expo Go. Android closed-app calls use the
+native FCM path documented above and require a rebuilt native app. iOS closed-app
+receiving still requires its separate PushKit/CallKit integration; JavaScript
+timers are not a reliable incoming-call mechanism while suspended. The existing
+CallPilot backend provides device registration and native push delivery. Android
+uses those endpoints after OTP sign-in; the separate iOS PushKit flow remains
+mobile-client work.
 
 ## Incoming calls while the app is closed (CallPilot server push mode)
 
@@ -216,6 +231,5 @@ to request it when allowed, then dials the one-call session from
 
 ## Still simulated (no backend endpoint yet)
 
-- In-app calling (dial/mute/hold/transfer) — the dashboard uses a browser SIP stack; the Active Call screen stays a local simulation until that is ported.
 - Voicemail audio playback (the `recordings/{uid}/audio/` blob is not streamed yet; the read receipt is real).
 - Chat attachments from the composer (upload needs multipart `files` support), per-message read receipts, availability/business-hours sync, bulk device sign-out.

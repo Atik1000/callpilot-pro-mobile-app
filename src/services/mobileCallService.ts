@@ -1,96 +1,209 @@
-import { ApiError, apiRequest } from './api';
+/** Server-push invitations are independent of a running React screen/SIP socket. */
+import { AppState, Platform } from 'react-native';
+import { nativeCallPush } from '../../modules/callpilot-keepalive/src';
+import { apiRequest, ApiError, tokenStore } from './api';
+import { parseMobilePush } from './mobileCallProtocol';
 
-/**
- * Mobile call control for CallPilot server push mode. All routes use the
- * device-bound JWT; POST bodies are always `{}` (the backend derives device,
- * user and business from the session).
- *
- *   GET  /voice/api/mobile/calls/                -> {calls:[...]}
- *   GET  /voice/api/mobile/calls/{uuid}/         -> one call's state
- *   POST /voice/api/mobile/calls/{uuid}/connect/ -> dial this device's SDK leg
- *   POST /voice/api/mobile/calls/{uuid}/decline/
- *   POST /voice/api/mobile/calls/{uuid}/end/
- */
-export type InvitationState =
-  | 'pending'
-  | 'connecting'
-  | 'answered'
-  | 'declined'
-  | 'cancelled'
-  | 'expired';
-
-export interface MobileCallState {
+export interface MobileCallInvitation {
   call_uuid: string;
   invitation_uid: string;
   organization_uid: string;
-  state: InvitationState;
-  call_status?: string;
-  channel?: string;
-  expires_at?: string;
-  started_at?: string | null;
-  answered_at?: string | null;
-  ended_at?: string | null;
-  caller?: { number?: string; name?: string; contact_uid?: string } | null;
-  can_connect?: boolean;
+  state: 'pending' | 'connecting' | 'answered' | 'cancelled' | 'expired' | 'declined';
+  expires_at: string;
+  channel: string;
+  caller: { number: string; name?: string | null; contact_uid?: string | null };
+  can_connect: boolean;
 }
 
-/** Push payload `kind:"incoming_call"` (FCM data values are strings). */
-export interface IncomingCallPush {
-  call_uuid: string;
-  organization_uid?: string;
-  sent_at?: string;
-  expires_at?: string;
+interface CallListener {
+  onInvitation(call: MobileCallInvitation): void;
+  onDismiss(callUuid: string): void;
+  onAnswerRequested(): Promise<void>;
+  onEndRequested(): void;
+  onError(message: string): void;
 }
 
-/** Invitation is still ringing this device. */
-export const isRinging = (s: MobileCallState) => s.state === 'pending' || s.state === 'connecting';
+const live = (call: MobileCallInvitation) =>
+  (call.state === 'pending' || call.state === 'connecting') && Date.parse(call.expires_at) > Date.now();
+const statePath = (uid: string) => `/voice/api/mobile/calls/${encodeURIComponent(uid)}/`;
 
-/** Call ended or this device lost the invitation (declined, cancelled, expired, answered elsewhere). */
-export function isOver(s: MobileCallState): boolean {
-  if (s.state === 'declined' || s.state === 'cancelled' || s.state === 'expired') return true;
-  return Boolean(s.ended_at);
-}
+class MobileCallService {
+  private listener: CallListener | null = null;
+  private subscription: { remove(): void } | null = null;
+  private appState: { remove(): void } | null = null;
+  private poll: ReturnType<typeof setInterval> | null = null;
+  private timeout: ReturnType<typeof setTimeout> | null = null;
+  private current: MobileCallInvitation | null = null;
+  private mediaActive = false;
+  private refreshing = false;
+  private actions = new Set<string>();
+  private generation = 0;
 
-export type ConnectOutcome =
-  | { kind: 'ok'; state: MobileCallState }
-  /** 409/410/403/404: stop and close the call screen. */
-  | { kind: 'gone'; message: string }
-  /** 502 or network: provider result unknown — keep polling, do not redial. */
-  | { kind: 'uncertain' };
+  get invitation(): MobileCallInvitation | null { return this.current; }
 
-const base = (uuid: string) => `/voice/api/mobile/calls/${encodeURIComponent(uuid)}/`;
-
-export const mobileCallService = {
-  async list(): Promise<MobileCallState[]> {
-    const data = await apiRequest<{ calls?: MobileCallState[] }>('/voice/api/mobile/calls/');
-    return data.calls ?? [];
-  },
-
-  get(uuid: string): Promise<MobileCallState> {
-    return apiRequest<MobileCallState>(base(uuid));
-  },
-
-  async connect(uuid: string): Promise<ConnectOutcome> {
-    try {
-      const state = await apiRequest<MobileCallState>(`${base(uuid)}connect/`, { method: 'POST', body: {} });
-      return { kind: 'ok', state };
-    } catch (error) {
-      if (error instanceof ApiError) {
-        if (error.status === 410) return { kind: 'gone', message: 'The call has expired.' };
-        if (error.status === 409) return { kind: 'gone', message: 'The call is no longer available.' };
-        if (error.status === 403 || error.status === 404) {
-          return { kind: 'gone', message: 'This phone cannot take that call.' };
-        }
+  start(listener: CallListener): void {
+    this.listener = listener;
+    if (Platform.OS !== 'android' || !nativeCallPush.available || !tokenStore.isDeviceBound()) return;
+    this.subscription ??= nativeCallPush.addInviteListener((value) => { void this.receive(value); });
+    this.appState ??= AppState.addEventListener('change', (state) => {
+      if (state === 'active') {
+        void this.receive(nativeCallPush.getPendingInvitation());
+        void this.recoverPending();
       }
-      return { kind: 'uncertain' };
+    });
+    void this.receive(nativeCallPush.getPendingInvitation());
+    void this.recoverPending();
+  }
+
+  stop(): void {
+    this.generation += 1;
+    this.subscription?.remove(); this.subscription = null;
+    this.appState?.remove(); this.appState = null;
+    this.reset();
+    this.listener = null;
+    this.actions.clear();
+  }
+
+  private reset(): void {
+    if (this.poll) clearInterval(this.poll);
+    if (this.timeout) clearTimeout(this.timeout);
+    this.poll = null; this.timeout = null;
+    if (this.current) nativeCallPush.endCall(this.current.call_uuid);
+    this.current = null;
+    this.mediaActive = false;
+  }
+
+  private dismiss(uid: string): void {
+    if (this.current?.call_uuid === uid) this.reset();
+    else nativeCallPush.endCall(uid);
+    this.listener?.onDismiss(uid);
+  }
+
+  private async recoverPending(): Promise<void> {
+    if (!tokenStore.isDeviceBound() || !this.listener || this.current) return;
+    const generation = this.generation;
+    try {
+      const result = await apiRequest<{ calls: MobileCallInvitation[] }>('/voice/api/mobile/calls/');
+      if (generation !== this.generation || !this.listener) return;
+      const call = result.calls.find((candidate) => live(candidate));
+      if (call) this.adopt(call);
+    } catch { /* The next push/foreground event can retry; never erase login on network failure. */ }
+  }
+
+  private adopt(call: MobileCallInvitation): void {
+    const session = tokenStore.getSession();
+    if (!session || call.organization_uid !== session.organizationUid) return;
+    if (!live(call) && call.state !== 'answered') { this.dismiss(call.call_uuid); return; }
+    if (this.current && this.current.call_uuid !== call.call_uuid) return;
+    const isNew = !this.current;
+    this.current = call;
+    if (!this.mediaActive && live(call)) this.listener?.onInvitation(call);
+    if (isNew) {
+      // Stop a ringing/connecting invite even if networking disappears. The
+      // timer is cancelled after this handset actually confirms media.
+      this.timeout = setTimeout(() => {
+        if (!this.mediaActive) this.dismiss(call.call_uuid);
+      }, Math.max(0, Date.parse(call.expires_at) - Date.now()));
+      this.poll = setInterval(() => { void this.refresh(); }, 1500);
     }
-  },
+  }
 
-  async decline(uuid: string): Promise<void> {
-    await apiRequest(`${base(uuid)}decline/`, { method: 'POST', body: {} }).catch(() => undefined);
-  },
+  private async refresh(): Promise<void> {
+    const current = this.current;
+    if (!current || this.refreshing) return;
+    this.refreshing = true;
+    const generation = this.generation;
+    try {
+      const fresh = await apiRequest<MobileCallInvitation>(statePath(current.call_uuid));
+      if (generation !== this.generation || this.current?.call_uuid !== current.call_uuid) return;
+      if (live(fresh) || fresh.state === 'answered') this.adopt(fresh);
+      else this.dismiss(current.call_uuid);
+    } catch (error) {
+      if (error instanceof ApiError && [401, 403, 404, 410].includes(error.status)) this.dismiss(current.call_uuid);
+    } finally { this.refreshing = false; }
+  }
 
-  async end(uuid: string): Promise<void> {
-    await apiRequest(`${base(uuid)}end/`, { method: 'POST', body: {} }).catch(() => undefined);
-  },
-};
+  private async receive(value: unknown): Promise<void> {
+    const push = parseMobilePush(value);
+    const session = tokenStore.getSession();
+    if (!push || !session || push.organization_uid !== session.organizationUid) return;
+    const actionKey = `${push.call_uuid}:${push.action || 'open'}`;
+    if (this.actions.has(actionKey)) return;
+    // Native event plus cold-start pending state may arrive concurrently.
+    // Reserve intent before any asynchronous lookup, not after it.
+    if (push.action === 'answer' || push.action === 'decline') this.actions.add(actionKey);
+    const generation = this.generation;
+    try {
+      const call = await apiRequest<MobileCallInvitation>(statePath(push.call_uuid));
+      if (generation !== this.generation || call.organization_uid !== session.organizationUid) return;
+      if (push.action === 'decline') {
+        if (call.state === 'answered') this.listener?.onEndRequested();
+        await endMobileInvitation(call);
+        this.dismiss(call.call_uuid);
+        return;
+      }
+      if (call.state === 'answered' && this.current?.call_uuid === call.call_uuid) {
+        // A duplicate Open event can race the SDK's active event. The server
+        // has already marked our leg answered; keep its media deadline/state.
+        this.adopt(call);
+        return;
+      }
+      if (!live(call)) { this.dismiss(call.call_uuid); return; }
+      this.adopt(call);
+      if (push.action === 'answer' && this.current?.call_uuid === call.call_uuid) {
+        await this.listener?.onAnswerRequested();
+      }
+    } catch (error) {
+      this.actions.delete(actionKey);
+      if (error instanceof ApiError && [401, 403, 404, 409, 410].includes(error.status)) this.dismiss(push.call_uuid);
+      if (push.action === 'answer') this.listener?.onError(error instanceof Error ? error.message : 'Could not answer this call.');
+    }
+  }
+
+  async prepareAnswer(callUuid: string): Promise<MobileCallInvitation> {
+    const call = await apiRequest<MobileCallInvitation>(statePath(callUuid));
+    if (!live(call) || !call.can_connect) throw new Error('This incoming call is no longer available.');
+    this.adopt(call);
+    return call;
+  }
+
+  markMediaActive(): void {
+    if (!this.current) return;
+    this.mediaActive = true;
+    if (this.timeout) clearTimeout(this.timeout);
+    this.timeout = null;
+    nativeCallPush.markCallActive(this.current.call_uuid);
+  }
+
+  async declineOrEnd(): Promise<void> {
+    const current = this.current;
+    if (!current) return;
+    try {
+      const fresh = await apiRequest<MobileCallInvitation>(statePath(current.call_uuid));
+      await endMobileInvitation(fresh);
+    } finally { this.dismiss(current.call_uuid); }
+  }
+
+  finished(): void { this.reset(); }
+}
+
+async function endMobileInvitation(call: MobileCallInvitation): Promise<void> {
+  if (!live(call) && call.state !== 'answered') return;
+  await apiRequest(`${statePath(call.call_uuid)}${call.state === 'answered' ? 'end' : 'decline'}/`, { method: 'POST' });
+}
+
+/** Notification Decline works without mounting React screens or the SIP SDK. */
+export async function headlessPushAction(value: unknown): Promise<void> {
+  const push = parseMobilePush(value);
+  if (!push || push.action !== 'decline') return;
+  await tokenStore.load();
+  const session = tokenStore.getSession();
+  if (!session || session.organizationUid !== push.organization_uid) return;
+  try {
+    const call = await apiRequest<MobileCallInvitation>(statePath(push.call_uuid));
+    await endMobileInvitation(call);
+    nativeCallPush.endCall(push.call_uuid);
+  } catch { /* The server invitation deadline remains authoritative. */ }
+}
+
+export const mobileCallService = new MobileCallService();

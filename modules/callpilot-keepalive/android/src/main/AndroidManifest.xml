@@ -1,57 +1,28 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_PHONE_CALL" />
+  <uses-permission android:name="android.permission.MANAGE_OWN_CALLS" />
   <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
   <uses-permission android:name="android.permission.WAKE_LOCK" />
   <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
-  <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
   <uses-permission android:name="android.permission.VIBRATE" />
   <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
-  <!-- Self-managed Telecom calls (CallConnectionService). -->
-  <uses-permission android:name="android.permission.MANAGE_OWN_CALLS" />
-
   <application>
-    <service
-      android:name="expo.modules.callpilotkeepalive.KeepAliveService"
-      android:exported="false"
-      android:stopWithTask="false"
-      android:foregroundServiceType="specialUse">
-      <property
-        android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-        android:value="Keeps the VoIP business line registered so incoming calls ring while the app is in the background." />
-    </service>
-    <service
-      android:name="expo.modules.callpilotkeepalive.LineTaskService"
-      android:exported="false" />
-    <!-- Wakes the app for an incoming call (Telnyx push). Takes precedence
-         over expo-notifications' own FCM service, which uses priority -1. -->
-    <service
-      android:name="expo.modules.callpilotkeepalive.CallPushService"
-      android:exported="false">
-      <intent-filter>
+    <service android:name="expo.modules.callpilotkeepalive.CallPilotMessagingService" android:exported="false">
+      <intent-filter android:priority="1">
         <action android:name="com.google.firebase.MESSAGING_EVENT" />
       </intent-filter>
     </service>
-    <service
-      android:name="expo.modules.callpilotkeepalive.CallConnectionService"
-      android:permission="android.permission.BIND_TELECOM_CONNECTION_SERVICE"
-      android:exported="true">
-      <intent-filter>
-        <action android:name="android.telecom.ConnectionService" />
-      </intent-filter>
+    <service android:name="expo.modules.callpilotkeepalive.KeepAliveService" android:exported="false"
+      android:stopWithTask="false" android:foregroundServiceType="phoneCall" />
+    <service android:name="expo.modules.callpilotkeepalive.CallPilotPushActionService" android:exported="false" />
+    <service android:name="expo.modules.callpilotkeepalive.CallPilotConnectionService" android:exported="true"
+      android:permission="android.permission.BIND_TELECOM_CONNECTION_SERVICE">
+      <intent-filter><action android:name="android.telecom.ConnectionService" /></intent-filter>
     </service>
-    <receiver
-      android:name="expo.modules.callpilotkeepalive.CallActionReceiver"
-      android:exported="false" />
-    <receiver
-      android:name="expo.modules.callpilotkeepalive.BootReceiver"
-      android:exported="true">
-      <intent-filter>
-        <action android:name="android.intent.action.BOOT_COMPLETED" />
-        <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
-        <action android:name="android.intent.action.QUICKBOOT_POWERON" />
-        <action android:name="com.htc.intent.action.QUICKBOOT_POWERON" />
-      </intent-filter>
-    </receiver>
+    <receiver android:name="expo.modules.callpilotkeepalive.CallPilotActionReceiver" android:exported="false" />
+    <activity android:name="expo.modules.callpilotkeepalive.IncomingCallActivity" android:exported="false"
+      android:launchMode="singleTop" android:excludeFromRecents="true" android:showWhenLocked="true"
+      android:turnScreenOn="true" android:theme="@android:style/Theme.Material.NoActionBar" />
   </application>
 </manifest>

@@ -12,13 +12,12 @@ import { Href, router, Stack, usePathname } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import React, { useEffect, useRef } from 'react';
-import { Platform, StyleSheet, View } from 'react-native';
+import { AppState, Platform, StyleSheet, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { keepAlive } from '../../modules/callpilot-keepalive/src';
 import { VoipWebBridge } from '../components/voip/VoipWebBridge';
-import { useNativeCallActions } from '../hooks/useNativeCallActions';
-import { openCallPilotNotification, useNotificationRouting } from '../hooks/useNotificationRouting';
 import { usesWebVoipEngine, voipSupported } from '../services/voipService';
+import { notificationService } from '../services/notificationService';
 import { useAuthStore } from '../store/authStore';
 import { useCallStore } from '../store/callStore';
 
@@ -39,10 +38,6 @@ export default function RootLayout() {
     PlusJakartaSans_700Bold,
     PlusJakartaSans_800ExtraBold,
   });
-  // CallPilot message/alert pushes (native FCM) open their thread or Alerts.
-  useNotificationRouting(signedIn);
-  // CallKit / Telecom / call-notification actions and iOS VoIP pushes.
-  useNativeCallActions();
   // A notification tapped before sign-in finishes restoring is kept here
   // and opened once the protected screens become available.
   const pendingNotificationUrl = useRef<string | null>(null);
@@ -56,8 +51,6 @@ export default function RootLayout() {
   useEffect(() => {
     if (Platform.OS === 'web') return;
     const open = (response: Notifications.NotificationResponse | null) => {
-      // iOS APNs message/alert pushes (Android ones are native notifications).
-      if (openCallPilotNotification(response?.notification.request.content.data)) return;
       const url = response?.notification.request.content.data?.url;
       if (typeof url !== 'string') return;
       if (useAuthStore.getState().stage === 'signedIn') {
@@ -81,9 +74,20 @@ export default function RootLayout() {
     }
   }, [signedIn]);
 
-  // The VoIP phone registers while signed in and tears down only on sign-out.
-  // No unmount cleanup: closing/swiping the app destroys this screen, but the
-  // line must stay registered in the background service to receive calls.
+  useEffect(() => {
+    if (!signedIn || Platform.OS !== 'android' || usesWebVoipEngine) return;
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state !== 'active') return;
+      void notificationService.registerRemotePush().then((status) => {
+        if (useAuthStore.getState().stage !== 'signedIn') return;
+        useCallStore.setState({ pushReady: status.ready, pushDetail: status.detail });
+      });
+    });
+    return () => subscription.remove();
+  }, [signedIn]);
+
+  // Native FCM handles cold-start ringing. The signed-in UI connects signaling
+  // and registers this handset for server push; screen removal is not logout.
   const wasSignedIn = useRef(false);
   useEffect(() => {
     const { initVoip, shutdownVoip } = useCallStore.getState();
