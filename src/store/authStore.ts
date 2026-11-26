@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { AuthStage, User } from '../types';
+import { setSessionLostHandler } from '../services/api';
 import { authService } from '../services/authService';
 
 interface AuthState {
@@ -22,7 +23,14 @@ interface AuthState {
 // Kept in memory only (never persisted) so "Resend code" can re-trigger login.
 let pendingPassword: string | null = null;
 
-export const useAuthStore = create<AuthState>((set, get) => ({
+export const useAuthStore = create<AuthState>((set, get) => {
+  // A revoked device cannot refresh its bound session: sign in again.
+  setSessionLostHandler(() => {
+    if (get().stage === 'signedIn') {
+      set({ stage: 'signedOut', user: null, error: 'Your session ended. Sign in again.' });
+    }
+  });
+  return {
   stage: 'restoring',
   user: null,
   pendingEmail: null,
@@ -90,4 +98,5 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   clearError: () => set({ error: null }),
-}));
+  };
+});

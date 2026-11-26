@@ -8,13 +8,16 @@ import {
 } from '@expo-google-fonts/plus-jakarta-sans';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import * as Notifications from 'expo-notifications';
-import { Href, router, Stack } from 'expo-router';
+import { Href, router, Stack, usePathname } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import React, { useEffect, useRef } from 'react';
 import { Platform, StyleSheet, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { keepAlive } from '../../modules/callpilot-keepalive/src';
 import { VoipWebBridge } from '../components/voip/VoipWebBridge';
+import { useNativeCallActions } from '../hooks/useNativeCallActions';
+import { openCallPilotNotification, useNotificationRouting } from '../hooks/useNotificationRouting';
 import { usesWebVoipEngine, voipSupported } from '../services/voipService';
 import { useAuthStore } from '../store/authStore';
 import { useCallStore } from '../store/callStore';
@@ -36,6 +39,10 @@ export default function RootLayout() {
     PlusJakartaSans_700Bold,
     PlusJakartaSans_800ExtraBold,
   });
+  // CallPilot message/alert pushes (native FCM) open their thread or Alerts.
+  useNotificationRouting(signedIn);
+  // CallKit / Telecom / call-notification actions and iOS VoIP pushes.
+  useNativeCallActions();
   // A notification tapped before sign-in finishes restoring is kept here
   // and opened once the protected screens become available.
   const pendingNotificationUrl = useRef<string | null>(null);
@@ -49,6 +56,8 @@ export default function RootLayout() {
   useEffect(() => {
     if (Platform.OS === 'web') return;
     const open = (response: Notifications.NotificationResponse | null) => {
+      // iOS APNs message/alert pushes (Android ones are native notifications).
+      if (openCallPilotNotification(response?.notification.request.content.data)) return;
       const url = response?.notification.request.content.data?.url;
       if (typeof url !== 'string') return;
       if (useAuthStore.getState().stage === 'signedIn') {
@@ -88,12 +97,23 @@ export default function RootLayout() {
   }, [signedIn]);
 
   // An incoming Telnyx call surfaces the full-screen incoming call UI.
+  // Opened exactly once per call: a second copy of the screen stacked on top
+  // made it flash when the call was answered or ended.
   const hasIncomingCall = useCallStore((s) => Boolean(s.incomingCall));
+  const pathname = usePathname();
+  const onIncomingScreen = pathname === '/incoming-call';
   useEffect(() => {
-    if (hasIncomingCall && signedIn) {
+    if (hasIncomingCall && signedIn && !onIncomingScreen) {
       router.push('/incoming-call');
     }
-  }, [hasIncomingCall, signedIn]);
+  }, [hasIncomingCall, signedIn, onIncomingScreen]);
+
+  // Show over the lock screen and wake the display only while a call rings.
+  // Driven by the call itself (not the screen mounting and unmounting), so the
+  // flag flips once per call instead of flickering.
+  useEffect(() => {
+    keepAlive.setShowOverLockScreen(hasIncomingCall);
+  }, [hasIncomingCall]);
 
   if (!fontsLoaded && !fontError) return null;
 

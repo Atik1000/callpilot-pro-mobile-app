@@ -19,15 +19,16 @@ import android.os.VibratorManager
  * vibration only.
  */
 object Ringer {
-  private const val MAX_RING_MS = 60_000L
+  private const val MAX_RING_MS = 70_000L
   private var player: MediaPlayer? = null
   private var vibrator: Vibrator? = null
   private var savedVolume: Int? = null
   private val handler = Handler(Looper.getMainLooper())
   private val autoStop = Runnable { stopInternal() }
 
+  /** Rings until stopped, or for at most `maxMs` (the invitation's remaining time). */
   @Synchronized
-  fun start(context: Context) {
+  fun start(context: Context, maxMs: Long = MAX_RING_MS) {
     if (player != null || vibrator != null) return
     val app = context.applicationContext
     val audio = app.getSystemService(Context.AUDIO_SERVICE) as AudioManager
@@ -77,12 +78,15 @@ object Ringer {
     }
 
     handler.removeCallbacks(autoStop)
-    handler.postDelayed(autoStop, MAX_RING_MS)
+    handler.postDelayed(autoStop, maxMs.coerceIn(1_000L, MAX_RING_MS))
     appContext = app
   }
 
   @Synchronized
   fun stop() = stopInternal()
+
+  @Synchronized
+  fun isRinging(): Boolean = player != null || vibrator != null
 
   private var appContext: Context? = null
 

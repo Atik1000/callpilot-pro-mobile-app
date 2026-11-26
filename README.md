@@ -153,6 +153,67 @@ support (device token registration + a sender), which `devapi.callpilot.pro`
 does not expose yet. iOS also suspends JS timers shortly after backgrounding,
 so background polling is best-effort until real push lands.
 
+## Incoming calls while the app is closed (CallPilot server push mode)
+
+The backend contract is in [`docs/whatsapp-calling-and-mobile.md`](docs/whatsapp-calling-and-mobile.md).
+Nothing runs in the background between calls:
+
+1. After the emailed-OTP sign-in the app binds the session to this
+   installation (`POST /jigsaw/auth/device/`), keeps the device-bound tokens in
+   SecureStore, refreshes them via `/jigsaw/auth/refresh/`, and sends
+   `X-Organization-Id` on every request (`src/services/api.ts`,
+   `src/services/deviceService.ts`).
+2. It registers its FCM token at `POST /jigsaw/devices/{uid}/native-push/`
+   (again on every launch/foreground, so token rotation is picked up).
+3. The backend's `incoming_call` push (call_uuid + expiry only) rings the phone
+   from native code (`CallPushService`), deduplicated by call_uuid and stopped
+   at `expires_at`. The JS line task fetches the call state and polls it.
+4. On **Answer** the app waits for the Telnyx SDK to register, then POSTs
+   `/voice/api/mobile/calls/{uuid}/connect/`; the backend dials this device and
+   the app accepts only the INVITE whose `X-CallPilot-Call-UUID` /
+   `X-CallPilot-Invitation-UUID` match. Decline/end use the matching endpoints.
+5. Message/alert pushes show a generic notification; tapping fetches the
+   message and opens its thread (or Alerts).
+
+The app no longer registers a push token with Telnyx (that would ring twice),
+so the old Telnyx portal push credential is not needed.
+
+One-time setup: Firebase Android app for `pro.callpilot.app`, its
+`google-services.json` in the project root (`app.config.js` picks it up), and
+the `CALLPILOT_FCM_*` settings on the backend. Rebuild the dev client after
+native changes (`npx expo run:android`). Without Firebase, or when the device
+cannot be bound, the app falls back to the always-on service
+(`EXPO_PUBLIC_CALL_WAKE=service` forces it).
+
+**Native call UI**
+
+- **Android:** a self-managed Telecom `ConnectionService` registers each
+  server-push call with the system (headsets/watches can answer or end it),
+  and the full-screen call notification has real **Answer** / **Decline**
+  buttons. Decline works without opening the app (headless task → `decline`).
+- **iOS:** `modules/callpilot-keepalive/ios` registers for PushKit at launch
+  (before JS), reports every VoIP push to CallKit immediately with `call_uuid`
+  as the CallKit UUID, ends invalid/expired/signed-out pushes at once, and
+  hands CallKit's audio session to WebRTC. Answer/End/Mute/DTMF from CallKit
+  drive the same call store as the in-app screen. The app registers its
+  PushKit VoIP token, APNs alert token and APNs environment (read from the
+  signed provisioning profile) with the backend.
+
+iOS setup: the App ID `pro.callpilot.app` needs Push Notifications enabled and
+the backend needs the `CALLPILOT_APNS_*` settings with
+`CALLPILOT_APNS_BUNDLE_ID=pro.callpilot.app`. Rebuild with
+`npx expo run:ios --device` (PushKit does not work in the simulator).
+
+Run the guide's real-device acceptance matrix before release; none of it can
+be verified from a simulator or emulator alone.
+
+## WhatsApp calls
+
+In a WhatsApp conversation the call button places a WhatsApp call: the app
+checks the recipient's permission (`/voice/api/whatsapp/permissions/`), offers
+to request it when allowed, then dials the one-call session from
+`/voice/api/whatsapp/session/`. There is no PSTN fallback.
+
 ## Still simulated (no backend endpoint yet)
 
 - In-app calling (dial/mute/hold/transfer) — the dashboard uses a browser SIP stack; the Active Call screen stays a local simulation until that is ported.

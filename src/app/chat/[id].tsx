@@ -4,8 +4,8 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   FlatList,
+  Keyboard,
   KeyboardAvoidingView,
-  Platform,
   StyleSheet,
   View,
 } from 'react-native';
@@ -86,7 +86,18 @@ export default function ChatDetailsScreen() {
 
   const rows = useMemo(() => buildRows(messages ?? []), [messages]);
 
+  // Keep the newest message in view when the keyboard opens.
+  useEffect(() => {
+    const subscription = Keyboard.addListener('keyboardDidShow', () => {
+      listRef.current?.scrollToEnd({ animated: true });
+    });
+    return () => subscription.remove();
+  }, []);
+
   const channelLabel = conversation?.channel === 'sms' ? 'SMS' : 'WhatsApp';
+  // The id encodes the channel, so this holds even before the inbox loads.
+  const isWhatsApp = (conversation?.channel ?? id?.split('__')[1]) === 'whatsapp';
+  const callNumber = contact?.phone || (isPhoneConversation ? contactKey : undefined);
   const subtitle = contact
     ? `${contactCategoryLabel[contact.category]} · ${channelLabel}`
     : channelLabel;
@@ -127,11 +138,12 @@ export default function ChatDetailsScreen() {
       }
       subtitle={subtitle}
       rightElement={
-        contact ? (
+        callNumber ? (
           <IconButton
             icon={<Phone size={19} color={colors.black} />}
-            onPress={() => startCall(contact.phone, contact)}
-            accessibilityLabel={`Call ${contact.name}`}
+            // WhatsApp threads call over WhatsApp (permission-checked, no PSTN fallback).
+            onPress={() => startCall(callNumber, contact ?? null, isWhatsApp ? 'whatsapp' : 'phone')}
+            accessibilityLabel={`${isWhatsApp ? 'WhatsApp call' : 'Call'} ${contact?.name ?? formatPhone(callNumber)}`}
             size={44}
             backgroundColor={colors.headerControl}
           />
@@ -143,7 +155,7 @@ export default function ChatDetailsScreen() {
   return (
     <KeyboardAvoidingView
       style={styles.flex}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      behavior="padding"
     >
       <View style={styles.flex}>
         {header}
@@ -153,6 +165,7 @@ export default function ChatDetailsScreen() {
           keyExtractor={(row) => row.id}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
           onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: false })}
           ListEmptyComponent={
             <EmptyState

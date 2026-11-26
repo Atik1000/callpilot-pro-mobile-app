@@ -3,6 +3,7 @@ import { AppState, PermissionsAndroid, Platform } from 'react-native';
 import { keepAlive } from '../../modules/callpilot-keepalive/src';
 import { apiRequest } from './api';
 import { SERVICE_MODE } from './config';
+import { whatsappCallService } from './whatsappCallService';
 
 /**
  * Telnyx VoIP calling, ported from the CallPilot web dashboard:
@@ -29,6 +30,15 @@ export type VoipCallPhase =
 export interface IncomingCallInfo {
   phoneNumber: string;
   callerName?: string;
+}
+
+/** How an outbound call leaves the business: phone line (PSTN) or WhatsApp. */
+export type CallChannel = 'phone' | 'whatsapp';
+
+/** CallPilot server-push invitation this device asked the backend to connect. */
+export interface ExpectedInvite {
+  callUuid: string;
+  invitationUid?: string;
 }
 
 export interface VoipListener {
@@ -61,7 +71,7 @@ export interface VoipEngine {
   connect(): Promise<void>;
   disconnect(): Promise<void>;
   readonly isOnline: boolean;
-  startCall(destinationNumber: string): Promise<void>;
+  startCall(destinationNumber: string, channel?: CallChannel): Promise<void>;
   answer(): Promise<void>;
   decline(): void;
   hangup(): void;
@@ -77,6 +87,8 @@ export interface VoipEngine {
  * loaded with require() and typed here instead of importing its types.
  */
 interface TelnyxCall {
+  /** SIP X- headers of the incoming INVITE (e.g. X-CallPilot-Call-UUID). */
+  inviteCustomHeaders?: { name: string; value: string }[] | null;
   on(event: 'telnyx.call.state', handler: (call: TelnyxCall, state: string) => void): void;
   answer(): Promise<void>;
   hangup(): void;
@@ -92,7 +104,16 @@ interface TelnyxClient {
   on(event: 'telnyx.client.error', handler: (error: Error) => void): void;
   on(
     event: 'telnyx.call.incoming',
-    handler: (call: TelnyxCall, msg: { params?: { caller_id_number?: string; caller_id_name?: string } }) => void,
+    handler: (
+      call: TelnyxCall,
+      msg: {
+        params?: {
+          caller_id_number?: string;
+          caller_id_name?: string;
+          dialogParams?: { custom_headers?: { name: string; value: string }[] };
+        };
+      },
+    ) => void,
   ): void;
   on(
     event: 'telnyx.call.remoteEnded',
@@ -152,6 +173,8 @@ export function describeCallEnd(reason: CallEndReason | null, wasActive: boolean
 }
 
 interface TelnyxModule {
+  // No pushNotificationDeviceToken: CallPilot server push mode sends the
+  // incoming-call push itself; Telnyx's own push would ring twice.
   TelnyxRTC: new (options: { login_token: string }) => TelnyxClient;
 }
 
@@ -257,6 +280,50 @@ export async function authorizeOutboundCall(): Promise<CallAuthorization> {
   return { callerId: identity.callerId, headers };
 }
 
+export interface DialPlan {
+  target: string;
+  callerId?: string;
+  headers: { name: string; value: string }[];
+}
+
+/** WhatsApp call blocked by Meta permission; `canRequest` = a request may be sent now. */
+export class WhatsAppPermissionError extends Error {
+  canRequest: boolean;
+  constructor(message: string, canRequest: boolean) {
+    super(message);
+    this.canRequest = canRequest;
+  }
+}
+
+/**
+ * Resolves what to dial. Phone: the cleaned number plus the per-call session
+ * proof. WhatsApp: a fresh permission check, then a one-call, destination-bound
+ * session; the backend chooses the WhatsApp route and business identity.
+ */
+export async function planOutboundCall(destinationNumber: string, channel: CallChannel = 'phone'): Promise<DialPlan> {
+  const target = toDialableNumber(destinationNumber);
+  if (!target) throw new Error('Enter a valid telephone number.');
+  if (channel === 'whatsapp') {
+    const permission = await whatsappCallService.getPermission(target);
+    if (!permission.can_call) {
+      throw new WhatsAppPermissionError(
+        permission.detail || 'This contact has not allowed WhatsApp calls yet.',
+        permission.can_request,
+      );
+    }
+    const session = await whatsappCallService.createSession(target);
+    const headers = [{ name: 'X-CallPilot-Session', value: session.call_session_proof }];
+    const ext = session.extension_uid?.trim();
+    if (ext) headers.push({ name: 'X-Voice-Ext', value: ext });
+    return { target: session.destination_number, headers };
+  }
+  const auth = await authorizeOutboundCall();
+  return { target, callerId: auth.callerId, headers: auth.headers };
+}
+
+const headerValue = (headers: { name: string; value: string }[] | null | undefined, name: string) =>
+  headers?.find((h) => h.name?.toLowerCase() === name.toLowerCase())?.value?.trim() || undefined;
+
 export async function ensureMicrophonePermission(): Promise<void> {
   if (Platform.OS !== 'android') return; // iOS prompts from getUserMedia.
   const granted = await PermissionsAndroid.request(
@@ -290,6 +357,48 @@ class NativeVoipService implements VoipEngine {
   /** Re-registers the line if the socket silently died (screen off, Doze, network swap). */
   private watchdog: ReturnType<typeof setInterval> | null = null;
   private appStateSub: { remove(): void } | null = null;
+  /** Server-push call the user answered; its SDK INVITE is accepted on arrival. */
+  private expected: ExpectedInvite | null = null;
+  private readyWaiters: (() => void)[] = [];
+
+  /**
+   * Accept the next INVITE carrying this X-CallPilot-Call-UUID (and invitation)
+   * automatically: the user already pressed Answer on the call screen.
+   */
+  expectInvite(invite: ExpectedInvite | null) {
+    this.expected = invite;
+  }
+
+  /** True while a call (ringing or connected) is held by the SDK. */
+  get hasCall(): boolean {
+    return Boolean(this.currentCall || this.incomingCall);
+  }
+
+  /**
+   * Resolves true once the SDK is registered (false after `timeoutMs`).
+   * `fresh`: a connection left from before backgrounding may be dead without
+   * knowing it, so reconnect unless the app is on screen.
+   */
+  async waitUntilReady(timeoutMs = 15000, fresh = false): Promise<boolean> {
+    if (fresh && !this.hasCall && AppState.currentState !== 'active') {
+      this.clientReady = false;
+      void this.connect();
+    } else if (this.isOnline) {
+      return true;
+    } else if (!this.connecting && !this.reconnectTimer) {
+      void this.connect();
+    }
+    return new Promise((resolve) => {
+      const onReady = () => done(true);
+      const timer = setTimeout(() => done(this.isOnline), timeoutMs);
+      const done = (ok: boolean) => {
+        clearTimeout(timer);
+        this.readyWaiters = this.readyWaiters.filter((w) => w !== onReady);
+        resolve(ok);
+      };
+      this.readyWaiters.push(onReady);
+    });
+  }
 
   private startWatchdog() {
     if (!this.watchdog) {
@@ -385,6 +494,9 @@ class NativeVoipService implements VoipEngine {
         if (this.client !== client) return;
         this.clientReady = true;
         this.listener?.onStatus('online', 'Online — ready for calls');
+        const waiters = this.readyWaiters;
+        this.readyWaiters = [];
+        waiters.forEach((w) => w());
       });
 
       client.on('telnyx.client.error', (error: Error) => {
@@ -403,6 +515,12 @@ class NativeVoipService implements VoipEngine {
 
       client.on('telnyx.call.incoming', (call: TelnyxCall, msg: any) => {
         if (this.client !== client) return;
+        const headers = call.inviteCustomHeaders ?? msg?.params?.dialogParams?.custom_headers;
+        const callUuid = headerValue(headers, 'X-CallPilot-Call-UUID');
+        if (callUuid) {
+          this.acceptServerPushInvite(call, callUuid, headerValue(headers, 'X-CallPilot-Invitation-UUID'));
+          return;
+        }
         // A second call while busy is declined, matching the dashboard.
         if (this.currentCall || this.incomingCall) {
           try {
@@ -433,6 +551,42 @@ class NativeVoipService implements VoipEngine {
     }
   }
 
+  /**
+   * Server push mode: this SIP leg exists only because this device POSTed
+   * `connect`. Accept it only for the invitation the user answered (same
+   * native call screen); reject anything unmatched, late or duplicated.
+   */
+  private acceptServerPushInvite(call: TelnyxCall, callUuid: string, invitationUid?: string) {
+    const expected = this.expected;
+    const same = (a?: string, b?: string) => !a || !b || a.toLowerCase() === b.toLowerCase();
+    const matches =
+      expected &&
+      expected.callUuid.toLowerCase() === callUuid.toLowerCase() &&
+      same(expected.invitationUid, invitationUid);
+    if (!matches || this.currentCall) {
+      try {
+        call.hangup();
+      } catch {}
+      return;
+    }
+    this.expected = null;
+    this.incomingCall = null;
+    this.currentCall = call;
+    this.endReason = null;
+    this.callWasActive = false;
+    this.outbound = false;
+    this.watchCall(call);
+    this.listener?.onCallPhase('connecting');
+    void ensureMicrophonePermission()
+      .then(() => call.answer())
+      .then(() => this.startAudioSession())
+      .catch(() => {
+        try {
+          call.hangup();
+        } catch {}
+      });
+  }
+
   private scheduleReconnect(delayMs = 12000) {
     if (this.stopped || this.reconnectTimer) return;
     this.reconnectTimer = setTimeout(() => {
@@ -454,6 +608,7 @@ class NativeVoipService implements VoipEngine {
 
   async disconnect(): Promise<void> {
     this.stopped = true;
+    this.expected = null;
     this.stopWatchdog();
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
@@ -502,7 +657,7 @@ class NativeVoipService implements VoipEngine {
     });
   }
 
-  async startCall(destinationNumber: string): Promise<void> {
+  async startCall(destinationNumber: string, channel: CallChannel = 'phone'): Promise<void> {
     const client = this.client;
     if (!client || !this.clientReady) {
       throw new Error('Phone is not connected yet. Wait for the Online status and retry.');
@@ -510,19 +665,17 @@ class NativeVoipService implements VoipEngine {
     if (this.currentCall || this.incomingCall) {
       throw new Error('Finish the current call before starting another one.');
     }
-    const target = toDialableNumber(destinationNumber);
-    if (!target) throw new Error('Enter a valid telephone number.');
     await ensureMicrophonePermission();
-    const auth = await authorizeOutboundCall();
+    const plan = await planOutboundCall(destinationNumber, channel);
     if (this.client !== client || !this.clientReady) {
       throw new Error('The phone connection changed while starting the call. Wait for Online, then try again.');
     }
 
     const call = await client.newCall({
-      destinationNumber: target,
+      destinationNumber: plan.target,
       audio: true,
-      callerIdNumber: auth.callerId,
-      customHeaders: auth.headers,
+      callerIdNumber: plan.callerId,
+      customHeaders: plan.headers,
     });
     this.endReason = null;
     this.callWasActive = false;

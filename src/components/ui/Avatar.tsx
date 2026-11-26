@@ -27,13 +27,23 @@ export function Avatar({
     borderRadius: size / 2,
     backgroundColor,
   };
+  const fontSize = Math.round(size * 0.32);
   const content = imageUri ? (
     <Image source={{ uri: imageUri }} style={[circle, styles.image]} />
   ) : (
     <View style={[styles.circle, circle]}>
       <AppText
         color={textColor}
-        style={{ fontSize: Math.round(size * 0.32), fontFamily: fontFamily.extrabold }}
+        numberOfLines={1}
+        // lineHeight must scale with the font: the default body line height
+        // (21) clips the initials on large avatars (call screens).
+        style={{
+          fontSize,
+          lineHeight: Math.round(fontSize * 1.25),
+          fontFamily: fontFamily.extrabold,
+          textAlign: 'center',
+          includeFontPadding: false,
+        }}
       >
         {getInitials(name)}
       </AppText>

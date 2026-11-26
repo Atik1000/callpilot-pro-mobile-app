@@ -6,6 +6,7 @@ import {
 } from '../data/constants';
 import { apiRequest, tokenStore } from './api';
 import { SERVICE_MODE, mockDelay } from './config';
+import { deviceService } from './deviceService';
 
 export interface LoginResult {
   otpRequired: boolean;
@@ -13,8 +14,18 @@ export interface LoginResult {
 
 interface TokenResponse {
   otp_required?: boolean;
+  otp_challenge?: string;
   access?: string;
   refresh?: string;
+}
+
+/** Returned by POST /token when a code was emailed; required by verify-otp. */
+let otpChallenge: string | null = null;
+
+/** After sign-in: business context, then bind this installation (native only). */
+async function completeSignIn(): Promise<void> {
+  await deviceService.loadOrganization();
+  await deviceService.bind();
 }
 
 interface MeResponse {
@@ -35,9 +46,16 @@ const liveAuthService = {
       auth: false,
       body: { email, password, remember_me: true },
     });
-    if (data.otp_required) return { otpRequired: true };
+    if (data.otp_required) {
+      otpChallenge = data.otp_challenge ?? null;
+      return { otpRequired: true };
+    }
     if (data.access) {
       await tokenStore.save(data.access, data.refresh);
+      // Trusted device (no OTP this time): still try to bind for push mode.
+      // The backend may refuse a password-only session; then calls use the
+      // always-on service instead.
+      await completeSignIn();
       return { otpRequired: false };
     }
     throw new Error('Unexpected sign-in response.');
@@ -47,10 +65,12 @@ const liveAuthService = {
     const data = await apiRequest<TokenResponse>('/token/verify-otp', {
       method: 'POST',
       auth: false,
-      body: { otp_code: code },
+      body: otpChallenge ? { otp_challenge: otpChallenge, otp_code: code } : { otp_code: code },
     });
     if (!data.access) throw new Error('That code is not right.');
+    otpChallenge = null;
     await tokenStore.save(data.access, data.refresh);
+    await completeSignIn();
   },
 
   /** Loads profile + business line for the signed-in session. */
@@ -75,7 +95,10 @@ const liveAuthService = {
     const hasTokens = await tokenStore.load();
     if (!hasTokens) return null;
     try {
-      return await liveAuthService.fetchSessionUser();
+      const user = await liveAuthService.fetchSessionUser();
+      // Sessions from before device binding existed: bind them now if allowed.
+      await completeSignIn().catch(() => undefined);
+      return user;
     } catch {
       await tokenStore.clear();
       return null;
@@ -83,6 +106,8 @@ const liveAuthService = {
   },
 
   async logout(): Promise<void> {
+    otpChallenge = null;
+    await deviceService.unregister();
     await tokenStore.clear();
   },
 

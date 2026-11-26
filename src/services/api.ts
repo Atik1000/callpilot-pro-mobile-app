@@ -21,6 +21,10 @@ export const API_BASE_URL =
 
 const ACCESS_KEY = 'callpilot.access';
 const REFRESH_KEY = 'callpilot.refresh';
+/** Set once the session is bound to this installation (POST /jigsaw/auth/device/). */
+const DEVICE_KEY = 'callpilot.device';
+/** Business the session acts for; sent as X-Organization-Id on every request. */
+const ORG_KEY = 'callpilot.organization';
 
 /** SecureStore on device; AsyncStorage on web where SecureStore is unavailable. */
 const secureStorage = {
@@ -40,11 +44,21 @@ const secureStorage = {
 
 let accessToken: string | null = null;
 let refreshToken: string | null = null;
+let deviceUid: string | null = null;
+let organizationUid: string | null = null;
+
+/** Called when a device-bound session can no longer be refreshed (revoked). */
+let onSessionLost: (() => void) | null = null;
+export function setSessionLostHandler(handler: (() => void) | null) {
+  onSessionLost = handler;
+}
 
 export const tokenStore = {
   async load(): Promise<boolean> {
     accessToken = await secureStorage.get(ACCESS_KEY);
     refreshToken = await secureStorage.get(REFRESH_KEY);
+    deviceUid = await secureStorage.get(DEVICE_KEY);
+    organizationUid = await secureStorage.get(ORG_KEY);
     return Boolean(accessToken);
   },
   async save(access: string, refresh?: string): Promise<void> {
@@ -55,14 +69,35 @@ export const tokenStore = {
       await secureStorage.set(REFRESH_KEY, refresh);
     }
   },
+  /** Replaces the unbound sign-in tokens with this installation's bound ones. */
+  async saveDevice(uid: string, access: string, refresh: string): Promise<void> {
+    deviceUid = uid;
+    await secureStorage.set(DEVICE_KEY, uid);
+    await tokenStore.save(access, refresh);
+  },
+  async saveOrganization(uid: string | null): Promise<void> {
+    organizationUid = uid;
+    if (uid) await secureStorage.set(ORG_KEY, uid);
+    else await secureStorage.remove(ORG_KEY);
+  },
   async clear(): Promise<void> {
     accessToken = null;
     refreshToken = null;
+    deviceUid = null;
+    organizationUid = null;
     await secureStorage.remove(ACCESS_KEY);
     await secureStorage.remove(REFRESH_KEY);
+    await secureStorage.remove(DEVICE_KEY);
+    await secureStorage.remove(ORG_KEY);
   },
   hasSession(): boolean {
     return Boolean(accessToken);
+  },
+  deviceUid(): string | null {
+    return deviceUid;
+  },
+  organizationUid(): string | null {
+    return organizationUid;
   },
 };
 
@@ -87,15 +122,29 @@ function errorMessageFrom(body: unknown, fallback: string): string {
   return fallback;
 }
 
-async function refreshAccessToken(): Promise<boolean> {
+let refreshing: Promise<boolean> | null = null;
+
+/**
+ * Device-bound sessions refresh through /jigsaw/auth/refresh/ and never fall
+ * back to an unbound session: a rejected refresh means the device was revoked
+ * and the user must sign in again.
+ */
+async function doRefresh(): Promise<boolean> {
   if (!refreshToken) return false;
+  const bound = Boolean(deviceUid);
   try {
-    const response = await fetch(`${API_BASE_URL}/token/refresh`, {
+    const response = await fetch(`${API_BASE_URL}${bound ? '/jigsaw/auth/refresh/' : '/token/refresh'}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ refresh: refreshToken }),
     });
-    if (!response.ok) return false;
+    if (!response.ok) {
+      if (bound && (response.status === 400 || response.status === 401 || response.status === 403)) {
+        await tokenStore.clear();
+        onSessionLost?.();
+      }
+      return false;
+    }
     const data = (await response.json()) as { access?: string; refresh?: string };
     if (!data.access) return false;
     await tokenStore.save(data.access, data.refresh);
@@ -103,6 +152,14 @@ async function refreshAccessToken(): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+/** One refresh at a time: parallel 401s share the same attempt. */
+export function refreshAccessToken(): Promise<boolean> {
+  refreshing ??= doRefresh().finally(() => {
+    refreshing = null;
+  });
+  return refreshing;
 }
 
 interface RequestOptions {
@@ -121,6 +178,7 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
       headers: {
         'Content-Type': 'application/json',
         ...(auth && accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        ...(auth && organizationUid ? { 'X-Organization-Id': organizationUid } : {}),
       },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
