@@ -12,10 +12,11 @@ import { Href, router, Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import React, { useEffect, useRef } from 'react';
-import { Platform, StyleSheet, View } from 'react-native';
+import { AppState, Platform, StyleSheet, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { VoipWebBridge } from '../components/voip/VoipWebBridge';
 import { usesWebVoipEngine, voipSupported } from '../services/voipService';
+import { notificationService } from '../services/notificationService';
 import { useAuthStore } from '../store/authStore';
 import { useCallStore } from '../store/callStore';
 
@@ -72,9 +73,20 @@ export default function RootLayout() {
     }
   }, [signedIn]);
 
-  // The VoIP phone registers while signed in and tears down only on sign-out.
-  // No unmount cleanup: closing/swiping the app destroys this screen, but the
-  // line must stay registered in the background service to receive calls.
+  useEffect(() => {
+    if (!signedIn || Platform.OS !== 'android' || usesWebVoipEngine) return;
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state !== 'active') return;
+      void notificationService.registerRemotePush().then((status) => {
+        if (useAuthStore.getState().stage !== 'signedIn') return;
+        useCallStore.setState({ pushReady: status.ready, pushDetail: status.detail });
+      });
+    });
+    return () => subscription.remove();
+  }, [signedIn]);
+
+  // Native FCM handles cold-start ringing. The signed-in UI connects signaling
+  // and registers this handset for server push; screen removal is not logout.
   const wasSignedIn = useRef(false);
   useEffect(() => {
     const { initVoip, shutdownVoip } = useCallStore.getState();

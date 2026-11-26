@@ -1,7 +1,7 @@
 import { useRouter } from 'expo-router';
 import { ChevronDown } from 'lucide-react-native';
 import React, { useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, View } from 'react-native';
 import Animated from 'react-native-reanimated';
 import { rise } from '../../components/ui/motion';
 import { ScreenContainer } from '../../components/layout/ScreenContainer';
@@ -17,8 +17,10 @@ import { SectionHeader } from '../../components/ui/SectionHeader';
 import { SegmentedTabs } from '../../components/ui/SegmentedTabs';
 import { ToggleRow } from '../../components/ui/ToggleRow';
 import { authService } from '../../services/authService';
+import { notificationService } from '../../services/notificationService';
 import { useAuthStore } from '../../store/authStore';
 import { useSettingsStore } from '../../store/settingsStore';
+import { useCallStore } from '../../store/callStore';
 import { colors, fontFamily, spacing } from '../../theme';
 import { formatPhone } from '../../utils/formatPhone';
 import { OutOfHoursDestination } from '../../types';
@@ -40,6 +42,9 @@ export default function SettingsScreen() {
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
   const settings = useSettingsStore();
+  const pushReady = useCallStore((state) => state.pushReady);
+  const pushDetail = useCallStore((state) => state.pushDetail);
+  const [checkingPush, setCheckingPush] = useState(false);
 
   const [hoursPickerOpen, setHoursPickerOpen] = useState(false);
   const [destinationPickerOpen, setDestinationPickerOpen] = useState(false);
@@ -118,6 +123,20 @@ export default function SettingsScreen() {
       <Animated.View entering={rise(100)}>
       <SectionHeader title="Calls" />
       <Card>
+        {Platform.OS === 'android' ? <>
+          <AppText variant="cardTitle">Incoming calls while closed</AppText>
+          <AppText variant="supporting">
+            {pushReady ? 'This phone is registered for incoming call notifications.' : pushDetail || 'Checking this phone’s push registration…'}
+          </AppText>
+          {!pushReady ? <AppButton label={checkingPush ? 'Checking…' : 'Check incoming call setup'}
+            disabled={checkingPush} onPress={() => {
+              setCheckingPush(true);
+              void notificationService.registerRemotePush().then((result) => {
+                useCallStore.setState({ pushReady: result.ready, pushDetail: result.detail });
+              }).finally(() => setCheckingPush(false));
+            }} /> : null}
+          <Divider />
+        </> : null}
         <ToggleRow
           title="Ring on mobile and laptop"
           subtitle="A call on one shows on the other"
@@ -146,7 +165,7 @@ export default function SettingsScreen() {
       <Card>
         <ToggleRow
           title="Two-step sign-in"
-          subtitle="Code sent to your phone"
+          subtitle="Code sent to your work email"
           value={settings.twoStepEnabled}
           onToggle={settings.toggleTwoStep}
         />
@@ -206,8 +225,7 @@ export default function SettingsScreen() {
         destructive
         onConfirm={() => {
           setSignOutOpen(false);
-          logout();
-          router.replace('/(auth)/login');
+          void logout().finally(() => router.replace('/(auth)/login'));
         }}
         onCancel={() => setSignOutOpen(false)}
       />

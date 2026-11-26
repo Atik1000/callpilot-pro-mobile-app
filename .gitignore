@@ -41,3 +41,7 @@ example
 # generated native folders
 /ios
 /android
+
+# Firebase Android client configuration is supplied locally or as an EAS file.
+/google-services.json
+/GoogleService-Info.plist

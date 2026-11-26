@@ -15,7 +15,7 @@ interface AuthState {
   login: (email: string, password: string) => Promise<'signedIn' | 'otp' | null>;
   verifyOtp: (code: string) => Promise<boolean>;
   resendOtp: () => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
   clearError: () => void;
 }
 
@@ -83,10 +83,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     await authService.login(email, pendingPassword).catch(() => undefined);
   },
 
-  logout: () => {
+  logout: async () => {
     pendingPassword = null;
-    void authService.logout();
-    set({ stage: 'signedOut', user: null, pendingEmail: null, error: null });
+    set({ isLoading: true });
+    try { await authService.logout(); }
+    finally { set({ stage: 'signedOut', user: null, pendingEmail: null, error: null, isLoading: false }); }
   },
 
   clearError: () => set({ error: null }),

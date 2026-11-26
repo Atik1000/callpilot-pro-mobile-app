@@ -15,19 +15,38 @@ class CallPilotKeepAliveModule : Module() {
 
   override fun definition() = ModuleDefinition {
     Name("CallPilotKeepAlive")
+    Events("onIncomingCallInvitation")
 
-    /** Starts (or updates) the foreground "ready for calls" service. */
+    OnCreate {
+      NativeCalls.eventSink = { value -> sendEvent("onIncomingCallInvitation", value) }
+    }
+    OnDestroy { NativeCalls.eventSink = null }
+
+    Function("configureSession") { deviceUid: String, organizationUid: String ->
+      NativeCallStore.configure(context, deviceUid, organizationUid)
+    }
+    Function("clearSession") { NativeCallStore.clearSession(context) }
+    Function("getPendingInvitation") { NativeCallStore.pending(context)?.toMap() }
+    Function("clearInvitation") { callUuid: String -> NativeCalls.clearInvitation(context, callUuid) }
+    Function("markCallActive") { callUuid: String -> NativeCalls.markActive(context, callUuid) }
+    Function("endCall") { callUuid: String -> NativeCalls.endCall(context, callUuid) }
+    Function("getPushDiagnostics") {
+      mapOf(
+        "session_configured" to NativeCallStore.enabled(context),
+        "notifications_enabled" to androidx.core.app.NotificationManagerCompat.from(context).areNotificationsEnabled(),
+        "full_screen_intent_allowed" to (android.os.Build.VERSION.SDK_INT < 34 || context.getSystemService(android.app.NotificationManager::class.java).canUseFullScreenIntent()),
+      )
+    }
+
+    /** Foreground support for a real call only; JS must not start this while idle. */
     Function("start") { title: String, body: String ->
       val intent = Intent(context, KeepAliveService::class.java)
         .putExtra(KeepAliveService.EXTRA_TITLE, title)
         .putExtra(KeepAliveService.EXTRA_BODY, body)
-        .putExtra(KeepAliveService.EXTRA_FROM_APP, true)
-      LinePrefs.setEnabled(context, true)
       ContextCompat.startForegroundService(context, intent)
     }
 
     Function("stop") {
-      LinePrefs.setEnabled(context, false)
       Ringer.stop()
       context.stopService(Intent(context, KeepAliveService::class.java))
       Notifications.clearIncomingCall(context)
@@ -67,7 +86,7 @@ class CallPilotKeepAliveModule : Module() {
       Notifications.clearIncomingCall(context)
     }
 
-    /** True when Android will not put the app to sleep (needed on Vivo/Xiaomi/etc.). */
+    /** Diagnostic only; a battery exemption never guarantees wake-up. */
     Function("isIgnoringBatteryOptimizations") {
       val pm = context.getSystemService(Context.POWER_SERVICE) as PowerManager
       pm.isIgnoringBatteryOptimizations(context.packageName)

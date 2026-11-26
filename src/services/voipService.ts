@@ -1,7 +1,9 @@
 import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { AppState, PermissionsAndroid, Platform } from 'react-native';
 import { keepAlive } from '../../modules/callpilot-keepalive/src';
-import { apiRequest } from './api';
+import { apiRequest, ApiError, tokenStore } from './api';
+import { matchesMobileCall } from './mobileCallProtocol';
+import type { MobileCallInvitation } from './mobileCallService';
 import { SERVICE_MODE } from './config';
 
 /**
@@ -290,6 +292,9 @@ class NativeVoipService implements VoipEngine {
   /** Re-registers the line if the socket silently died (screen off, Doze, network swap). */
   private watchdog: ReturnType<typeof setInterval> | null = null;
   private appStateSub: { remove(): void } | null = null;
+  private expectedMobile: MobileCallInvitation | null = null;
+  private mobileAnswer: { resolve(): void; reject(error: Error): void } | null = null;
+  private mobileAnswerTimeout: ReturnType<typeof setTimeout> | null = null;
 
   private startWatchdog() {
     if (!this.watchdog) {
@@ -410,6 +415,25 @@ class NativeVoipService implements VoipEngine {
           } catch {}
           return;
         }
+        // Device-bound Android legs are dialled only after the user answers a
+        // particular authenticated server invitation. Never accept an
+        // unrelated next SIP invite, even if it arrives during that request.
+        if (Platform.OS === 'android' && tokenStore.isDeviceBound()) {
+          const expected = this.expectedMobile;
+          if (!expected || Date.parse(expected.expires_at) <= Date.now() || !matchesMobileCall(msg, expected, call)) {
+            try { call.hangup(); } catch {}
+            return;
+          }
+          this.incomingCall = call;
+          this.watchCall(call);
+          void this.answer().then(() => {
+            this.completeMobileAnswer();
+          }, (error: unknown) => {
+            this.completeMobileAnswer(error instanceof Error ? error : new Error('Could not answer this call.'));
+            this.hangup();
+          });
+          return;
+        }
         this.incomingCall = call;
         this.watchCall(call);
         this.startRinging();
@@ -453,6 +477,7 @@ class NativeVoipService implements VoipEngine {
   }
 
   async disconnect(): Promise<void> {
+    this.completeMobileAnswer(new Error('Phone disconnected.'));
     this.stopped = true;
     this.stopWatchdog();
     if (this.reconnectTimer) {
@@ -466,6 +491,53 @@ class NativeVoipService implements VoipEngine {
 
   get isOnline(): boolean {
     return this.clientReady && Boolean(this.client);
+  }
+
+  private completeMobileAnswer(error?: Error): void {
+    const pending = this.mobileAnswer;
+    this.mobileAnswer = null;
+    this.expectedMobile = null;
+    if (this.mobileAnswerTimeout) clearTimeout(this.mobileAnswerTimeout);
+    this.mobileAnswerTimeout = null;
+    if (error) pending?.reject(error);
+    else pending?.resolve();
+  }
+
+  /** Wake/register SDK, request this invitation's leg once, then match both headers. */
+  async answerMobileInvitation(invitation: MobileCallInvitation): Promise<void> {
+    if (this.mobileAnswer || this.currentCall || this.incomingCall) throw new Error('Another call is already in progress.');
+    await ensureMicrophonePermission();
+    const deadline = Date.parse(invitation.expires_at);
+    if (!Number.isFinite(deadline) || deadline <= Date.now()) throw new Error('This call has expired.');
+    if (!this.isOnline) void this.connect();
+    while (!this.isOnline && Date.now() < deadline) {
+      await new Promise<void>((resolve) => setTimeout(resolve, 100));
+      if (this.stopped) throw new Error('Phone disconnected.');
+    }
+    if (!this.isOnline || Date.now() >= deadline) throw new Error('The call expired before the phone connected.');
+    this.expectedMobile = invitation;
+    const answer = new Promise<void>((resolve, reject) => { this.mobileAnswer = { resolve, reject }; });
+    this.mobileAnswerTimeout = setTimeout(() => {
+      this.completeMobileAnswer(new Error('The incoming call connection timed out.'));
+      this.hangup();
+    }, deadline - Date.now());
+    // Set the expected identity before POST: its SIP leg can arrive before the
+    // HTTP response. A transport/502 result is uncertain, so wait for that same
+    // correlated leg until expiry instead of blindly dialing another one.
+    void apiRequest<MobileCallInvitation>(`/voice/api/mobile/calls/${encodeURIComponent(invitation.call_uuid)}/connect/`, {
+      method: 'POST',
+    }).then((result) => {
+      if (this.expectedMobile?.call_uuid !== invitation.call_uuid) return;
+      if (!['connecting', 'answered'].includes(result.state)) {
+        this.completeMobileAnswer(new Error('This incoming call is no longer available.'));
+      }
+    }, (error: unknown) => {
+      if (this.expectedMobile?.call_uuid !== invitation.call_uuid) return;
+      if (error instanceof ApiError && error.status >= 400 && error.status < 500) {
+        this.completeMobileAnswer(new Error(error.message));
+      }
+    });
+    return answer;
   }
 
   private watchCall(call: TelnyxCall) {
@@ -602,7 +674,7 @@ class NativeVoipService implements VoipEngine {
   private ringing = false;
   private startRinging(): void {
     if (this.ringing) return;
-    // Native ringer: phone ringtone at full ring volume + vibration, also
+    // Native ringer: respects the user's ring volume and vibration mode, also
     // while the app is in the background (60s cap in case a stop is missed).
     if (keepAlive.startRinging()) {
       this.ringing = true;
@@ -626,6 +698,8 @@ class NativeVoipService implements VoipEngine {
   }
 
   private startAudioSession(): void {
+    // A foreground call lifecycle is needed during real audio, not while idle.
+    if (!this.expectedMobile) keepAlive.start('CallPilot', 'Call in progress');
     const icm = this.getInCallManager();
     try {
       icm?.start({ media: 'audio' });
@@ -633,12 +707,14 @@ class NativeVoipService implements VoipEngine {
   }
 
   private finishCall(): void {
+    this.completeMobileAnswer(new Error('The call ended.'));
     this.stopRinging();
     this.currentCall = null;
     this.incomingCall = null;
     this.endReason = null;
     this.callWasActive = false;
     this.outbound = false;
+    keepAlive.stop();
     const icm = this.getInCallManager();
     try {
       icm?.setForceSpeakerphoneOn(false);
