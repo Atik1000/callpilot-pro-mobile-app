@@ -10,6 +10,7 @@ import {
 } from '../types';
 import { callService } from '../services/callService';
 import {
+  CallChannel,
   IncomingCallInfo,
   nativeVoipService,
   usesWebVoipEngine,
@@ -32,6 +33,8 @@ type LoadStatus = 'idle' | 'loading' | 'ready' | 'error';
 interface StartCallInput {
   phoneNumber: string;
   contact?: Contact | null;
+  /** 'whatsapp': business-initiated WhatsApp call (permission required). */
+  channel?: CallChannel;
 }
 
 interface IncomingCallState {
@@ -312,7 +315,11 @@ export const useCallStore = create<CallState>((set, get) => {
       });
     },
 
-    startCall: async ({ phoneNumber, contact }) => {
+    startCall: async ({ phoneNumber, contact, channel = 'phone' }) => {
+      // No simulated fallback for WhatsApp calls.
+      if (channel === 'whatsapp' && !voipService.isOnline) {
+        throw new Error(get().voipDetail || 'Phone is still connecting. Wait for "Phone online" and retry.');
+      }
       if (voipService.isOnline) {
         set({
           activeCall: buildActiveCall(phoneNumber, contact),
@@ -324,7 +331,7 @@ export const useCallStore = create<CallState>((set, get) => {
           callNotes: [],
         });
         try {
-          await voipService.startCall(phoneNumber);
+          await voipService.startCall(phoneNumber, channel);
         } catch (error) {
           set({ activeCall: null, callPhase: null, isLiveCall: false });
           throw error;

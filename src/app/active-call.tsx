@@ -15,7 +15,6 @@ import {
   Alert,
   KeyboardAvoidingView,
   Modal,
-  Platform,
   Pressable,
   StyleSheet,
   TextInput,
@@ -324,7 +323,7 @@ export default function ActiveCallScreen() {
       <Modal visible={noteOpen} transparent animationType="slide" onRequestClose={() => setNoteOpen(false)}>
         <KeyboardAvoidingView
           style={styles.sheetBackdrop}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          behavior="padding"
         >
           <View style={[styles.sheet, { paddingBottom: insets.bottom + spacing.xl }]}>
             <AppText variant="cardTitle" style={styles.sheetTitle}>

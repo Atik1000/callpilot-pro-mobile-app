@@ -1,8 +1,8 @@
 import {
   ensureMicrophonePermission,
-  authorizeOutboundCall,
+  CallChannel,
   fetchVoiceToken,
-  toDialableNumber,
+  planOutboundCall,
   CallEndReason,
   describeCallEnd,
   VoipCallPhase,
@@ -201,17 +201,15 @@ class WebVoipService implements VoipEngine {
     return this.online;
   }
 
-  async startCall(destinationNumber: string): Promise<void> {
+  async startCall(destinationNumber: string, channel: CallChannel = 'phone'): Promise<void> {
     if (!this.online) {
       throw new Error('Phone is not connected yet. Wait for the Online status and retry.');
     }
     if (this.inCall || this.ringing) {
       throw new Error('Finish the current call before starting another one.');
     }
-    const target = toDialableNumber(destinationNumber);
-    if (!target) throw new Error('Enter a valid telephone number.');
     await ensureMicrophonePermission();
-    const auth = await authorizeOutboundCall();
+    const plan = await planOutboundCall(destinationNumber, channel);
     this.inCall = true;
     const started = new Promise<void>((resolve, reject) => {
       const timer = setTimeout(
@@ -222,9 +220,9 @@ class WebVoipService implements VoipEngine {
     });
     this.post({
       type: 'call',
-      destination: target,
-      callerNumber: auth.callerId,
-      headers: auth.headers,
+      destination: plan.target,
+      callerNumber: plan.callerId,
+      headers: plan.headers,
     });
     try {
       await started;

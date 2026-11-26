@@ -8,12 +8,13 @@ import {
 } from '@expo-google-fonts/plus-jakarta-sans';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import * as Notifications from 'expo-notifications';
-import { Href, router, Stack } from 'expo-router';
+import { Href, router, Stack, usePathname } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import React, { useEffect, useRef } from 'react';
 import { AppState, Platform, StyleSheet, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { keepAlive } from '../../modules/callpilot-keepalive/src';
 import { VoipWebBridge } from '../components/voip/VoipWebBridge';
 import { usesWebVoipEngine, voipSupported } from '../services/voipService';
 import { notificationService } from '../services/notificationService';
@@ -100,12 +101,23 @@ export default function RootLayout() {
   }, [signedIn]);
 
   // An incoming Telnyx call surfaces the full-screen incoming call UI.
+  // Opened exactly once per call: a second copy of the screen stacked on top
+  // made it flash when the call was answered or ended.
   const hasIncomingCall = useCallStore((s) => Boolean(s.incomingCall));
+  const pathname = usePathname();
+  const onIncomingScreen = pathname === '/incoming-call';
   useEffect(() => {
-    if (hasIncomingCall && signedIn) {
+    if (hasIncomingCall && signedIn && !onIncomingScreen) {
       router.push('/incoming-call');
     }
-  }, [hasIncomingCall, signedIn]);
+  }, [hasIncomingCall, signedIn, onIncomingScreen]);
+
+  // Show over the lock screen and wake the display only while a call rings.
+  // Driven by the call itself (not the screen mounting and unmounting), so the
+  // flag flips once per call instead of flickering.
+  useEffect(() => {
+    keepAlive.setShowOverLockScreen(hasIncomingCall);
+  }, [hasIncomingCall]);
 
   if (!fontsLoaded && !fontError) return null;
 

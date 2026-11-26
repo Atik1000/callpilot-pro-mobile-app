@@ -5,6 +5,7 @@ import { apiRequest, ApiError, tokenStore } from './api';
 import { matchesMobileCall } from './mobileCallProtocol';
 import type { MobileCallInvitation } from './mobileCallService';
 import { SERVICE_MODE } from './config';
+import { whatsappCallService } from './whatsappCallService';
 
 /**
  * Telnyx VoIP calling, ported from the CallPilot web dashboard:
@@ -32,6 +33,9 @@ export interface IncomingCallInfo {
   phoneNumber: string;
   callerName?: string;
 }
+
+/** How an outbound call leaves the business: phone line (PSTN) or WhatsApp. */
+export type CallChannel = 'phone' | 'whatsapp';
 
 export interface VoipListener {
   onStatus(status: VoipStatus, detail?: string): void;
@@ -63,7 +67,7 @@ export interface VoipEngine {
   connect(): Promise<void>;
   disconnect(): Promise<void>;
   readonly isOnline: boolean;
-  startCall(destinationNumber: string): Promise<void>;
+  startCall(destinationNumber: string, channel?: CallChannel): Promise<void>;
   answer(): Promise<void>;
   decline(): void;
   hangup(): void;
@@ -257,6 +261,47 @@ export async function authorizeOutboundCall(): Promise<CallAuthorization> {
   if (ext) headers.push({ name: 'X-Voice-Ext', value: ext });
   if (__DEV__) console.log('[voip] call authorized', JSON.stringify({ ext: Boolean(ext), callerId: Boolean(identity.callerId) }));
   return { callerId: identity.callerId, headers };
+}
+
+export interface DialPlan {
+  target: string;
+  callerId?: string;
+  headers: { name: string; value: string }[];
+}
+
+/** WhatsApp call blocked by Meta permission; `canRequest` = a request may be sent now. */
+export class WhatsAppPermissionError extends Error {
+  canRequest: boolean;
+  constructor(message: string, canRequest: boolean) {
+    super(message);
+    this.canRequest = canRequest;
+  }
+}
+
+/**
+ * Resolves what to dial. Phone: the cleaned number plus the per-call session
+ * proof. WhatsApp: a fresh permission check, then a one-call, destination-bound
+ * session; the backend chooses the WhatsApp route and business identity.
+ */
+export async function planOutboundCall(destinationNumber: string, channel: CallChannel = 'phone'): Promise<DialPlan> {
+  const target = toDialableNumber(destinationNumber);
+  if (!target) throw new Error('Enter a valid telephone number.');
+  if (channel === 'whatsapp') {
+    const permission = await whatsappCallService.getPermission(target);
+    if (!permission.can_call) {
+      throw new WhatsAppPermissionError(
+        permission.detail || 'This contact has not allowed WhatsApp calls yet.',
+        permission.can_request,
+      );
+    }
+    const session = await whatsappCallService.createSession(target);
+    const headers = [{ name: 'X-CallPilot-Session', value: session.call_session_proof }];
+    const ext = session.extension_uid?.trim();
+    if (ext) headers.push({ name: 'X-Voice-Ext', value: ext });
+    return { target: session.destination_number, headers };
+  }
+  const auth = await authorizeOutboundCall();
+  return { target, callerId: auth.callerId, headers: auth.headers };
 }
 
 export async function ensureMicrophonePermission(): Promise<void> {
@@ -574,7 +619,7 @@ class NativeVoipService implements VoipEngine {
     });
   }
 
-  async startCall(destinationNumber: string): Promise<void> {
+  async startCall(destinationNumber: string, channel: CallChannel = 'phone'): Promise<void> {
     const client = this.client;
     if (!client || !this.clientReady) {
       throw new Error('Phone is not connected yet. Wait for the Online status and retry.');
@@ -582,19 +627,17 @@ class NativeVoipService implements VoipEngine {
     if (this.currentCall || this.incomingCall) {
       throw new Error('Finish the current call before starting another one.');
     }
-    const target = toDialableNumber(destinationNumber);
-    if (!target) throw new Error('Enter a valid telephone number.');
     await ensureMicrophonePermission();
-    const auth = await authorizeOutboundCall();
+    const plan = await planOutboundCall(destinationNumber, channel);
     if (this.client !== client || !this.clientReady) {
       throw new Error('The phone connection changed while starting the call. Wait for Online, then try again.');
     }
 
     const call = await client.newCall({
-      destinationNumber: target,
+      destinationNumber: plan.target,
       audio: true,
-      callerIdNumber: auth.callerId,
-      customHeaders: auth.headers,
+      callerIdNumber: plan.callerId,
+      customHeaders: plan.headers,
     });
     this.endReason = null;
     this.callWasActive = false;

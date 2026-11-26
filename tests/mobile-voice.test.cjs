@@ -66,6 +66,7 @@ function fixture() {
       PermissionsAndroid: { request: async () => 'granted', PERMISSIONS: { RECORD_AUDIO: 'audio' }, RESULTS: { GRANTED: 'granted' } } },
     '../../modules/callpilot-keepalive/src': { keepAlive: { start() {}, stop() {}, stopRinging() {}, startRinging: () => true } },
     './api': api, './config': { SERVICE_MODE: 'live' }, './mobileCallProtocol': protocol,
+    './whatsappCallService': { whatsappCallService: {} },
     '@telnyx/react-native-voice-sdk': { TelnyxRTC: Client },
     'react-native-incall-manager': { default: { start() {}, stop() {}, setForceSpeakerphoneOn() {} } },
   });

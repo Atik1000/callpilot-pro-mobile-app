@@ -1,0 +1,30 @@
+{
+  "project_info": {
+    "project_number": "829587882161",
+    "firebase_url": "https://ema-jhon-simple-45958.firebaseio.com",
+    "project_id": "ema-jhon-simple-45958",
+    "storage_bucket": "ema-jhon-simple-45958.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:829587882161:android:be4ca71cb571d8ba0e6290",
+        "android_client_info": {
+          "package_name": "pro.callpilot.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDbwEfYxSeOnBZSN5Nl0-0Kbj0aXS2WDus"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
