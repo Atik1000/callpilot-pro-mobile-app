@@ -18,6 +18,8 @@ import { SegmentedTabs } from '../../components/ui/SegmentedTabs';
 import { ToggleRow } from '../../components/ui/ToggleRow';
 import { authService } from '../../services/authService';
 import { notificationService } from '../../services/notificationService';
+import { describeCallPush } from '../../services/callPushDiagnostics';
+import { nativeCallPush } from '../../../modules/callpilot-keepalive/src';
 import { useAuthStore } from '../../store/authStore';
 import { useSettingsStore } from '../../store/settingsStore';
 import { useCallStore } from '../../store/callStore';
@@ -45,6 +47,7 @@ export default function SettingsScreen() {
   const pushReady = useCallStore((state) => state.pushReady);
   const pushDetail = useCallStore((state) => state.pushDetail);
   const [checkingPush, setCheckingPush] = useState(false);
+  const [callPushDiagnostics, setCallPushDiagnostics] = useState(() => nativeCallPush.getDiagnostics());
 
   const [hoursPickerOpen, setHoursPickerOpen] = useState(false);
   const [destinationPickerOpen, setDestinationPickerOpen] = useState(false);
@@ -135,6 +138,14 @@ export default function SettingsScreen() {
                 useCallStore.setState({ pushReady: result.ready, pushDetail: result.detail });
               }).finally(() => setCheckingPush(false));
             }} /> : null}
+          <AppText variant="supporting">{describeCallPush(callPushDiagnostics)}</AppText>
+          {Number(callPushDiagnostics?.last_call_push_at) > 0 ? <AppText variant="supporting">
+            Last call push: {new Date(Number(callPushDiagnostics?.last_call_push_at)).toLocaleString()}
+          </AppText> : null}
+          {callPushDiagnostics ? <AppText variant="supporting">
+            Mobile sign-in: {callPushDiagnostics.session_configured ? 'Stored' : 'Missing'} · Notifications: {callPushDiagnostics.notifications_enabled ? 'Allowed' : 'Blocked'} · Full-screen calls: {callPushDiagnostics.full_screen_intent_allowed ? 'Allowed' : 'Not allowed'}
+          </AppText> : null}
+          <AppButton label="Refresh call diagnostics" onPress={() => setCallPushDiagnostics(nativeCallPush.getDiagnostics())} />
           <Divider />
         </> : null}
         <ToggleRow

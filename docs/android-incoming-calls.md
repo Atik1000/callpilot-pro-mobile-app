@@ -131,15 +131,69 @@ adb logcat -s CallPilotPush
 ```
 
 - `stopped=true`: reopen and investigate Redmi's stopped/autostart policy.
-- `stopped=false` with no `incoming_call_received`: check the current native FCM
+- `stopped=false` with no `fcm_call_received`: check the current native FCM
   registration, Firebase project/package, backend push action and network/OEM
   delivery restrictions. FCM accepting a send is not proof of handset delivery.
-- `incoming_call_received` without visible ringing: check call notifications,
+- `fcm_call_received` without visible ringing: check call notifications,
   full-screen call access on Android versions that require it, and the native
   `telecom_registration_unavailable`/foreground-service diagnostic markers.
 - Ringing works but Answer fails: check current invitation state, device-bound
   authentication, SDK readiness and the backend connect result. Do not retry
   an uncertain connect by blindly creating extra provider calls.
+
+Calls working while the app remains in memory may be arriving through the
+Telnyx SDK connection. That alone does not verify the Firebase wake-up path.
+The updated APK shows a persistent result under **Settings → Calls → Incoming
+calls while closed → Refresh call diagnostics**, even after restarting the app:
+
+| Result | Meaning / next check |
+| --- | --- |
+| Install the updated native APK | This installation does not include these native diagnostics. Rebuild and install; an OTA update cannot add Kotlin changes. |
+| No incoming call push recorded | Compare the backend trace below, Firebase project/package, network access and Android stopped state. |
+| Missing mobile sign-in | Sign in with the emailed code, then use **Check incoming call setup** to register this installation. |
+| Invalid or expired | Check worker latency, the call deadline and device/server clocks. |
+| Notification setting disabled | Check app notifications and the **Incoming calls** channel in Android settings. The app-level flag alone does not prove that Android suppressed an exempt call notification. |
+| Notification submitted | Android accepted the notification request; this does not prove a visible screen. Check notification settings, full-screen access and OS restrictions. |
+
+The receiver saves only a timestamp and fixed status code before validating the
+invitation. No caller details, tokens or provider credentials are logged here.
+
+On the backend serving the installed app, immediately after a failed test call:
+
+```bash
+venv/bin/python manage.py jigsaw_mobile_call_diagnose --latest --organization BUSINESS_ID
+```
+
+Replace `BUSINESS_ID` with the business's numeric ID or UUID from Django admin's
+Organizations record. This read-only command does not call Firebase, decrypt
+tokens or send a test notification. Its output omits phone numbers, names,
+emails, tokens and raw provider errors, so it can be shared for diagnosis.
+
+- `no_registered_eligible_handset`: check the mobile sign-in, registration,
+  business ring group and consultant availability.
+- `push_pending_after_call_deadline`: fix immediate Celery worker dispatch. A
+  once-per-minute Beat sweep can be too late for an incoming call.
+- `native_push_failed_or_held`: inspect backend push setup and worker logs;
+  confirm the Firebase service account, project and `pro.callpilot.app` package
+  match the APK. Do not share the service-account JSON.
+- A new action records the number of provider-accepted pushes. Zero means no
+  provider acceptance; a positive count still does not prove handset delivery.
+  Older `completed` actions did not record this distinction.
+
+To test ordinary process death separately from a Redmi task-cleaner policy,
+press Home, then run:
+
+```bash
+adb shell am kill pro.callpilot.app
+adb shell pidof pro.callpilot.app
+adb shell dumpsys package pro.callpilot.app | rg 'User [0-9]+:|stopped='
+adb logcat -v time -s CallPilotPush AndroidRuntime
+```
+
+Confirm `pidof` is empty before calling from another phone. Do not use **Force
+stop** for this test. Compare this result with Clear all. If ordinary process
+death works but Clear all does not, investigate the phone's Autostart/battery
+policy and stopped state rather than adding an idle SIP foreground service.
 
 The native timeout bounds ringing even if networking fails. This backend version
 does not send a separate cancellation push; when React is running it polls call

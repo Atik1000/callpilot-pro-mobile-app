@@ -31,11 +31,13 @@ class CallPilotKeepAliveModule : Module() {
     Function("markCallActive") { callUuid: String -> NativeCalls.markActive(context, callUuid) }
     Function("endCall") { callUuid: String -> NativeCalls.endCall(context, callUuid) }
     Function("getPushDiagnostics") {
-      mapOf(
+      mapOf<String, Any>(
+        "native_push_version" to 2,
+        "incoming_channel_enabled" to Notifications.incomingChannelEnabled(context),
         "session_configured" to NativeCallStore.enabled(context),
         "notifications_enabled" to androidx.core.app.NotificationManagerCompat.from(context).areNotificationsEnabled(),
         "full_screen_intent_allowed" to (android.os.Build.VERSION.SDK_INT < 34 || context.getSystemService(android.app.NotificationManager::class.java).canUseFullScreenIntent()),
-      )
+      ) + NativeCallStore.callPushDiagnostics(context)
     }
 
     /** Foreground support for a real call only; JS must not start this while idle. */

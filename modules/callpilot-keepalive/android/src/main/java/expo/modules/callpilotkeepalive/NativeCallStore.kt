@@ -1,12 +1,43 @@
 package expo.modules.callpilotkeepalive
 
 import android.content.Context
+import android.util.Log
 import org.json.JSONObject
 
 /** Only nonsecret IDs and bounded invitation state are persisted here. */
 object NativeCallStore {
   private const val FILE = "callpilot_native_invitations"
   private fun prefs(context: Context) = context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
+  private fun diagnostics(context: Context) = context.getSharedPreferences(FILE + "_diagnostics", Context.MODE_PRIVATE)
+  private val diagnosticStages = setOf(
+    "fcm_call_received", "missing_session", "invalid_or_expired", "dedup", "busy", "capacity",
+    "accepted", "notification_posted", "active_notification_posted", "notification_post_failed",
+    "notification_permission_blocked", "notification_channel_blocked",
+  )
+
+  /** Never persist a call/account identifier, token or raw payload in diagnostics. */
+  fun recordCallPushReceived(context: Context, priority: Int, originalPriority: Int) {
+    runCatching {
+      diagnostics(context).edit().putLong("last_call_push_at", System.currentTimeMillis())
+        .putString("last_call_push_stage", "fcm_call_received").commit()
+    }
+    Log.i("CallPilotPush", "fcm_call_received priority=$priority original_priority=$originalPriority")
+  }
+
+  fun recordCallPushStage(context: Context, stage: String) {
+    if (stage !in diagnosticStages) return
+    runCatching { diagnostics(context).edit().putString("last_call_push_stage", stage).commit() }
+    if (stage == "notification_post_failed") Log.w("CallPilotPush", stage)
+    else Log.i("CallPilotPush", stage)
+  }
+
+  fun callPushDiagnostics(context: Context): Map<String, Any> = runCatching {
+    val store = diagnostics(context)
+    mapOf<String, Any>(
+      "last_call_push_at" to store.getLong("last_call_push_at", 0L),
+      "last_call_push_stage" to (store.getString("last_call_push_stage", "not_received") ?: "not_received"),
+    )
+  }.getOrDefault(mapOf("last_call_push_at" to 0L, "last_call_push_stage" to "not_received"))
 
   @Synchronized
   fun configure(context: Context, deviceUid: String, organizationUid: String) {
@@ -29,20 +60,37 @@ object NativeCallStore {
 
   @Synchronized
   fun accept(context: Context, data: Map<String, String>): NativeInvitation? {
-    if (!enabled(context)) return null
+    if (!enabled(context)) {
+      recordCallPushStage(context, "missing_session")
+      return null
+    }
     val now = System.currentTimeMillis()
-    val invitation = InviteValidator.parse(data, organization(context), now) ?: return null
+    val invitation = InviteValidator.parse(data, organization(context), now)
+    if (invitation == null) {
+      recordCallPushStage(context, "invalid_or_expired")
+      return null
+    }
     val store = prefs(context)
     val seen = runCatching { JSONObject(store.getString("seen", "{}") ?: "{}") }.getOrDefault(JSONObject())
     for (key in seen.keys().asSequence().toList()) {
       if (seen.optLong(key, 0) <= now) seen.remove(key)
     }
-    if (seen.has(invitation.callUuid)) return null
+    if (seen.has(invitation.callUuid)) {
+      recordCallPushStage(context, "dedup")
+      return null
+    }
     // One handset has one current native call. Do not replace an established call.
-    if (NativeCalls.hasActiveCall() || pending(context) != null) return null
-    if (seen.length() >= 32) return null
+    if (NativeCalls.hasActiveCall() || pending(context) != null) {
+      recordCallPushStage(context, "busy")
+      return null
+    }
+    if (seen.length() >= 32) {
+      recordCallPushStage(context, "capacity")
+      return null
+    }
     seen.put(invitation.callUuid, invitation.expiresMillis())
     store.edit().putString("seen", seen.toString()).putString("pending", JSONObject(invitation.toMap()).toString()).commit()
+    recordCallPushStage(context, "accepted")
     return invitation
   }
 
