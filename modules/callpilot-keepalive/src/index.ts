@@ -66,6 +66,10 @@ export interface NativePushDiagnostics {
   session_configured: boolean;
   notifications_enabled: boolean;
   full_screen_intent_allowed: boolean;
+  native_push_version?: number;
+  incoming_channel_enabled?: boolean;
+  last_call_push_at?: number;
+  last_call_push_stage?: string;
 }
 
 interface NativeCallPushModule {

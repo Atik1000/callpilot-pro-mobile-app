@@ -1,6 +1,5 @@
 package expo.modules.callpilotkeepalive
 
-import android.util.Log
 import com.google.firebase.messaging.RemoteMessage
 import expo.modules.notifications.service.ExpoFirebaseMessagingService
 
@@ -11,8 +10,10 @@ class CallPilotMessagingService : ExpoFirebaseMessagingService() {
       super.onMessageReceived(message)
       return
     }
+    // Record entry before validation: a late/blocked session is distinguishable
+    // from Firebase never starting this process. Values contain no payload IDs.
+    NativeCallStore.recordCallPushReceived(this, message.priority, message.originalPriority)
     val invitation = NativeCallStore.accept(this, message.data) ?: return
-    Log.i("CallPilotPush", "incoming_call_received")
     NativeCalls.receive(this, invitation)
   }
 

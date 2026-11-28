@@ -123,8 +123,33 @@ object Notifications {
     return builder.build()
   }
 
+  fun incomingChannelEnabled(context: Context): Boolean {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return true
+    // A missing channel is created on first presentation; it is not a user block.
+    return context.getSystemService(NotificationManager::class.java)
+      .getNotificationChannel(CHANNEL_INCOMING)?.importance != NotificationManager.IMPORTANCE_NONE
+  }
+
   fun showNativeCall(context: Context, invitation: NativeInvitation, active: Boolean) {
-    runCatching { context.getSystemService(NotificationManager::class.java).notify(ID_INCOMING, nativeCall(context, invitation, active)) }
+    runCatching {
+      context.getSystemService(NotificationManager::class.java).notify(ID_INCOMING, nativeCall(context, invitation, active))
+    }.onSuccess {
+      // notify() can return normally while Android silently suppresses a post.
+      // Observe controls without changing them or skipping self-managed-call APIs.
+      val submittedStage = if (active) "active_notification_posted" else "notification_posted"
+      val stage = runCatching {
+        when {
+          !androidx.core.app.NotificationManagerCompat.from(context).areNotificationsEnabled() -> "notification_permission_blocked"
+          !incomingChannelEnabled(context) -> "notification_channel_blocked"
+          else -> submittedStage
+        }
+      }.getOrDefault(submittedStage)
+      // Even "posted" means accepted by NotificationManager, not seen by a user.
+      NativeCallStore.recordCallPushStage(context, stage)
+    }.onFailure {
+      // Exception text may contain a PendingIntent or account data. Fixed code only.
+      NativeCallStore.recordCallPushStage(context, "notification_post_failed")
+    }
   }
 
   fun legacyActiveCall(context: Context, title: String, body: String): Notification {
